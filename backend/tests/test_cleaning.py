@@ -120,6 +120,28 @@ def test_constant_series_with_outlier_is_suspect_but_retained() -> None:
     assert series.iloc[200] == 50.0
 
 
+def test_clean_daily_exposes_per_day_suspect_mask() -> None:
+    days = 366
+    dates = [(date(2024, 1, 1) + timedelta(days=i)).isoformat() for i in range(days)]
+    tmax = [30.0] * days
+    tmax[200] = 50.0
+    tmax[100] = None
+    tmax[300] = 200.0
+    series = clean_daily(dates, tmax)
+    masks = ("missing_mask", "invalid_mask", "suspect_mask")
+    for name in masks:
+        assert name in series.attrs
+        mask = series.attrs[name]
+        assert isinstance(mask, np.ndarray)
+        assert mask.shape == (days,)
+        assert mask.dtype == np.dtype(bool)
+    assert bool(series.attrs["missing_mask"][100])
+    assert bool(series.attrs["invalid_mask"][300])
+    assert bool(series.attrs["suspect_mask"][200])
+    assert not bool(series.attrs["missing_mask"][200])
+    assert series.attrs["suspect_mask"].sum() == quality_report(series)["suspect_days"]
+
+
 @pytest.mark.parametrize(
     ("year", "valid_days", "total_days", "included"),
     [
@@ -149,7 +171,6 @@ def test_partial_year_is_excluded() -> None:
     assert report["years"][0]["included"] is False
     assert report["excluded_years"] == [2024]
 
-
 def test_drop_unusable_years_nulls_excluded_year_and_keeps_index() -> None:
     index = pd.date_range("2021-01-01", "2022-12-31", freq="D")
     series = pd.Series([30.0] * len(index), index=index, dtype="float64")
@@ -160,7 +181,6 @@ def test_drop_unusable_years_nulls_excluded_year_and_keeps_index() -> None:
     assert dropped["2021-12-31"] == 30.0
     assert np.isnan(dropped["2022-01-01"])
     assert np.isnan(dropped["2022-12-31"])
-
 
 def test_all_nan_series_survives() -> None:
     dates = [(date(2024, 1, 1) + timedelta(days=i)).isoformat() for i in range(366)]
@@ -174,7 +194,6 @@ def test_all_nan_series_survives() -> None:
     dropped = drop_unusable_years(series)
     assert dropped.isna().all()
 
-
 def test_report_is_plain_python_and_json_serialisable() -> None:
     dates = [(date(2024, 1, 1) + timedelta(days=i)).isoformat() for i in range(366)]
     tmax = [30.0] * 361 + [None] * 5
@@ -184,7 +203,6 @@ def test_report_is_plain_python_and_json_serialisable() -> None:
     assert report["min_valid_fraction"] == MIN_VALID_FRACTION
     assert report["bounds_c"] == [-90.0, 60.0]
 
-
 def test_missing_invalid_and_valid_counts_partition() -> None:
     series = clean_daily(["2024-01-01", "2024-01-02", "2024-01-04"], [10.0, "abc", None])
     report = quality_report(series)
@@ -192,7 +210,6 @@ def test_missing_invalid_and_valid_counts_partition() -> None:
     assert report["valid_days"] == 1
     assert report["missing_days"] == 2
     assert report["invalid_days"] == 1
-
 
 def test_input_lists_not_mutated() -> None:
     dates = ["2024-01-03", "2024-01-01", "2024-01-02"]
@@ -202,7 +219,6 @@ def test_input_lists_not_mutated() -> None:
     clean_daily(dates, tmax)
     assert dates == dates_before
     assert tmax == tmax_before
-
 
 def test_36_year_series_processes_in_well_under_one_second() -> None:
     days = 36 * 365 + 9
@@ -217,7 +233,6 @@ def test_36_year_series_processes_in_well_under_one_second() -> None:
     assert report["total_days"] == days
     assert elapsed < 1.0
 
-
 def test_single_day_input() -> None:
     series = clean_daily(["2024-06-01"], [40.0])
     assert len(series) == 1
@@ -226,17 +241,14 @@ def test_single_day_input() -> None:
     assert report["total_days"] == 1
     assert report["valid_fraction"] == 1.0
 
-
 def test_series_entirely_within_leap_day() -> None:
     series = clean_daily(["2024-02-29"], [-5.0])
     assert len(series) == 1
     assert series.iloc[0] == -5.0
 
-
 def test_mixed_int_and_float_values() -> None:
     series = clean_daily(["2024-01-01", "2024-01-02"], [30, 30.5])
     assert series.tolist() == [30.0, 30.5]
-
 
 def test_dates_in_different_formats() -> None:
     series = clean_daily(["2024-01-01", "2024/02/05", "2024-03-05"], [10.0, 20.0, 30.0])
@@ -245,14 +257,12 @@ def test_dates_in_different_formats() -> None:
     assert series["2024-02-05"] == 20.0
     assert series["2024-03-05"] == 30.0
 
-
 def test_booleans_are_invalid() -> None:
     series = clean_daily(["2024-01-01", "2024-01-02"], [True, 30.0])
     report = quality_report(series)
     assert report["valid_days"] == 1
     assert report["invalid_days"] == 1
     assert np.isnan(series.iloc[0])
-
 
 def test_huge_integer_is_invalid_not_a_crash() -> None:
     series = clean_daily(["2024-01-01", "2024-01-02"], [10**400, 30.0])

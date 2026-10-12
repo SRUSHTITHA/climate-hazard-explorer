@@ -31,7 +31,13 @@ def clean_daily(dates: list[str], tmax: list) -> pd.Series:
     clean = pd.Series(np.where(missing | invalid, np.nan, values), index=full, dtype="float64")
     clean.attrs["missing_mask"] = missing
     clean.attrs["invalid_mask"] = invalid
+    clean.attrs["suspect_mask"] = _suspect_mask(clean)
     return clean
+
+def _suspect_mask(series: pd.Series) -> np.ndarray:
+    valid = series.notna().to_numpy(dtype=bool)
+    median = series.rolling(15, center=True, min_periods=8).median()
+    return (valid & ((series - median).abs() > SUSPECT_DEVIATION_C)).to_numpy(dtype=bool)
 
 def _as_float(value: object) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
@@ -54,12 +60,12 @@ def _parse_index(dates: list[str]) -> pd.DatetimeIndex:
         raise ValueError("dates must not contain duplicates.")
     return index
 
-def _days_in_year(year: int) -> int:
+def days_in_year(year: int) -> int:
     return (dt.date(year, 12, 31) - dt.date(year, 1, 1)).days + 1
 
 def coverage_by_year(series: pd.Series) -> pd.Series:
     counts = series.notna().groupby(series.index.year).sum()
-    totals = pd.Series((_days_in_year(int(year)) for year in counts.index), index=counts.index)
+    totals = pd.Series((days_in_year(int(year)) for year in counts.index), index=counts.index)
     return counts / totals
 
 def drop_unusable_years(series: pd.Series) -> pd.Series:
@@ -74,8 +80,7 @@ def quality_report(series: pd.Series) -> dict:
     missing = attrs.get("missing_mask", series.isna().to_numpy(dtype=bool))
     invalid = attrs.get("invalid_mask", np.zeros(len(series), dtype=bool))
     valid = series.notna().to_numpy(dtype=bool)
-    median = series.rolling(15, center=True, min_periods=8).median()
-    suspect = valid & ((series - median).abs() > SUSPECT_DEVIATION_C)
+    suspect = attrs.get("suspect_mask", _suspect_mask(series))
     yearly = coverage_by_year(series)
     years = [
         {
