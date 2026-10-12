@@ -146,3 +146,240 @@ def _sanitize(value: Any) -> Any:
     if isinstance(value, float) and math.isnan(value):
         return None
     return value
+
+
+_THRESHOLD_KEY = ("cell_id", "baseline_start", "baseline_end", "window_days", "percentile")
+_EVENT_KEY = ("cell_id", "hazard", "start")
+_ANNUAL_KEY = ("cell_id", "hazard", "year")
+_ANALYSIS_KEY = ("key",)
+_EVENT_COLUMNS = [
+    "start",
+    "end",
+    "year",
+    "duration_days",
+    "peak_tmax",
+    "mean_tmax",
+    "intensity",
+    "max_exceedance",
+]
+_ANNUAL_COLUMNS = [
+    "valid_days",
+    "total_days",
+    "valid",
+    "event_count",
+    "heatwave_days",
+    "max_duration",
+    "mean_duration",
+    "mean_intensity",
+    "max_exceedance",
+    "peak_tmax",
+]
+
+
+def save_thresholds(
+    db: Database,
+    *,
+    cell_id: str,
+    hazard: str,
+    values: Any,
+    baseline_start: int,
+    baseline_end: int,
+    window_days: int,
+    percentile: float,
+    computed_for_last_full_year: int,
+) -> None:
+    cell_center(cell_id)
+    doc = {
+        "cell_id": cell_id,
+        "baseline_start": baseline_start,
+        "baseline_end": baseline_end,
+        "window_days": window_days,
+        "percentile": percentile,
+        "hazard": hazard,
+        "values": [None if math.isnan(v) else float(v) for v in values],
+        "computed_for_last_full_year": computed_for_last_full_year,
+        "created_at": dt.datetime.now(dt.UTC),
+    }
+    upsert_docs(db, THRESHOLDS, _THRESHOLD_KEY, [doc])
+
+
+def load_thresholds(
+    db: Database, cell_id: str, hazard: str, computed_for_last_full_year: int
+) -> pd.Series | None:
+    doc = db[THRESHOLDS].find_one({"cell_id": cell_id, "hazard": hazard})
+    if doc is None or doc.get("computed_for_last_full_year") != computed_for_last_full_year:
+        return None
+    values = [math.nan if value is None else float(value) for value in doc["values"]]
+    return pd.Series(values, index=range(1, len(values) + 1), name="threshold")
+
+
+def save_events(
+    db: Database,
+    *,
+    cell_id: str,
+    hazard: str,
+    events: pd.DataFrame,
+    computed_for_last_full_year: int,
+) -> None:
+    cell_center(cell_id)
+    now = dt.datetime.now(dt.UTC)
+    docs = [
+        {
+            "cell_id": cell_id,
+            "hazard": hazard,
+            "year": int(row.year),
+            "start": pd.Timestamp(row.start).strftime("%Y-%m-%d"),
+            "end": pd.Timestamp(row.end).strftime("%Y-%m-%d"),
+            "duration_days": int(row.duration_days),
+            "peak_tmax": float(row.peak_tmax),
+            "mean_tmax": float(row.mean_tmax),
+            "intensity": float(row.intensity),
+            "max_exceedance": float(row.max_exceedance),
+            "computed_for_last_full_year": computed_for_last_full_year,
+            "created_at": now,
+        }
+        for row in events.itertuples(index=False)
+    ]
+    upsert_docs(db, EVENTS, _EVENT_KEY, docs)
+
+
+def load_events(db: Database, cell_id: str, hazard: str) -> pd.DataFrame:
+    docs = list(db[EVENTS].find({"cell_id": cell_id, "hazard": hazard}).sort("start", 1))
+    if not docs:
+        return _empty_events()
+    frame = pd.DataFrame(
+        [
+            {
+                "start": pd.Timestamp(doc["start"]),
+                "end": pd.Timestamp(doc["end"]),
+                "year": int(doc["year"]),
+                "duration_days": int(doc["duration_days"]),
+                "peak_tmax": float(doc["peak_tmax"]),
+                "mean_tmax": float(doc["mean_tmax"]),
+                "intensity": float(doc["intensity"]),
+                "max_exceedance": float(doc["max_exceedance"]),
+            }
+            for doc in docs
+        ]
+    )
+    return frame.loc[:, _EVENT_COLUMNS]
+
+
+def save_annual_metrics(
+    db: Database,
+    *,
+    cell_id: str,
+    hazard: str,
+    metrics: pd.DataFrame,
+    computed_for_last_full_year: int,
+) -> None:
+    cell_center(cell_id)
+    docs = [
+        {
+            "cell_id": cell_id,
+            "hazard": hazard,
+            "year": int(year),
+            "valid_days": int(row["valid_days"]),
+            "total_days": int(row["total_days"]),
+            "valid": bool(row["valid"]),
+            "event_count": float(row["event_count"]),
+            "heatwave_days": float(row["heatwave_days"]),
+            "max_duration": float(row["max_duration"]),
+            "mean_duration": float(row["mean_duration"]),
+            "mean_intensity": float(row["mean_intensity"]),
+            "max_exceedance": float(row["max_exceedance"]),
+            "peak_tmax": float(row["peak_tmax"]),
+            "computed_for_last_full_year": computed_for_last_full_year,
+            "created_at": dt.datetime.now(dt.UTC),
+        }
+        for year, row in metrics.iterrows()
+    ]
+    upsert_docs(db, ANNUAL_METRICS, _ANNUAL_KEY, docs)
+
+
+def load_annual_metrics(
+    db: Database, cell_id: str, hazard: str, computed_for_last_full_year: int
+) -> pd.DataFrame | None:
+    docs = list(db[ANNUAL_METRICS].find({"cell_id": cell_id, "hazard": hazard}).sort("year", 1))
+    if not docs:
+        return None
+    if any(doc.get("computed_for_last_full_year") != computed_for_last_full_year for doc in docs):
+        return None
+    frame = pd.DataFrame(
+        [
+            {
+                "year": int(doc["year"]),
+                "valid_days": int(doc["valid_days"]),
+                "total_days": int(doc["total_days"]),
+                "valid": bool(doc["valid"]),
+                "event_count": _number(doc["event_count"]),
+                "heatwave_days": _number(doc["heatwave_days"]),
+                "max_duration": _number(doc["max_duration"]),
+                "mean_duration": _number(doc["mean_duration"]),
+                "mean_intensity": _number(doc["mean_intensity"]),
+                "max_exceedance": _number(doc["max_exceedance"]),
+                "peak_tmax": _number(doc["peak_tmax"]),
+            }
+            for doc in docs
+        ]
+    ).set_index("year")
+    frame.index.name = "year"
+    return frame.loc[:, _ANNUAL_COLUMNS]
+
+
+def save_analysis(
+    db: Database,
+    *,
+    key: str,
+    region: str,
+    cell_ids: list[str],
+    hazard: str,
+    start_year: int,
+    end_year: int,
+    computed_for_last_full_year: int,
+    result: dict,
+) -> None:
+    upsert_docs(
+        db,
+        ANALYSES,
+        _ANALYSIS_KEY,
+        [
+            {
+                "key": key,
+                "region": region,
+                "cell_ids": list(cell_ids),
+                "hazard": hazard,
+                "start_year": start_year,
+                "end_year": end_year,
+                "computed_for_last_full_year": computed_for_last_full_year,
+                "created_at": dt.datetime.now(dt.UTC),
+                "result": result,
+            }
+        ],
+    )
+
+
+def load_analysis(db: Database, key: str) -> dict | None:
+    doc = db[ANALYSES].find_one({"key": key})
+    if doc is None:
+        return None
+    return doc.get("result")
+
+
+def _number(value: Any) -> float:
+    return math.nan if value is None else float(value)
+
+
+def _empty_events() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "start": pd.Series(dtype="datetime64[ns]"),
+            "end": pd.Series(dtype="datetime64[ns]"),
+            "year": pd.Series(dtype="int64"),
+            "duration_days": pd.Series(dtype="int64"),
+            "peak_tmax": pd.Series(dtype="float64"),
+            "mean_tmax": pd.Series(dtype="float64"),
+            "intensity": pd.Series(dtype="float64"),
+            "max_exceedance": pd.Series(dtype="float64"),
+        }
+    )
