@@ -11,10 +11,10 @@ from slowapi.util import get_remote_address
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
+from app.errors import FORBIDDEN_MESSAGE_PARTS, AppError
 from app.models.schemas import ErrorResponse
 
 _LOGGER = logging.getLogger(__name__)
-
 _INVALID_MESSAGE = "The request parameters are invalid."
 _NOT_FOUND_MESSAGE = "The requested resource was not found."
 _METHOD_MESSAGE = "The request method is not allowed for this resource."
@@ -22,9 +22,7 @@ _RATE_MESSAGE = "Too many requests. Please retry later."
 _HTTP_MESSAGE = "The request could not be completed."
 _INTERNAL_MESSAGE = "An internal error occurred."
 
-_FORBIDDEN_PARTS = ("http", "mongodb", "/", "\\", "traceback")
 _SAFE_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,30}$")
-
 _SETTINGS = get_settings()
 
 
@@ -62,7 +60,7 @@ def _field_names(exc: RequestValidationError) -> list[str]:
         lowered = candidate.lower()
         if candidate in names or not _SAFE_FIELD.match(candidate):
             continue
-        if any(part in lowered for part in _FORBIDDEN_PARTS):
+        if any(part in lowered for part in FORBIDDEN_MESSAGE_PARTS):
             continue
         names.append(candidate)
     return names
@@ -89,6 +87,10 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
     if limiter_ is not None and rate_limit is not None:
         limiter_._inject_headers(response, rate_limit)
     return response
+
+
+def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    return _response(exc.status, exc.code, exc.message)
 
 
 def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

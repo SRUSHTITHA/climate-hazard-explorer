@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from app.engine.cleaning import MIN_VALID_FRACTION, coverage_by_year
+from app.engine.cleaning import MIN_VALID_FRACTION, coverage_by_year, is_sorted_datetime_index
+from app.errors import AppError
 
 BASELINE_START = 1991
 BASELINE_END = 2020
@@ -10,10 +11,6 @@ WINDOW_HALF_WIDTH = 7
 MIN_BASELINE_YEARS = 24
 MIN_POOL = 100
 DOY_COUNT = 366
-
-
-class ThresholdError(ValueError):
-    pass
 
 
 def leap_aligned_doy(index: pd.DatetimeIndex) -> np.ndarray:
@@ -27,9 +24,7 @@ def compute_thresholds(tmax: pd.Series) -> pd.Series:
     baseline = tmax[(tmax.index.year >= BASELINE_START) & (tmax.index.year <= BASELINE_END)]
     valid_years = int((coverage_by_year(baseline) >= MIN_VALID_FRACTION).sum())
     if valid_years < MIN_BASELINE_YEARS:
-        raise ThresholdError(
-            f"Baseline has {valid_years} valid year(s); at least {MIN_BASELINE_YEARS} required."
-        )
+        raise AppError.unavailable()
     pooled = _window_pool(_baseline_matrix(baseline))
     counts = np.count_nonzero(~np.isnan(pooled), axis=0)
     thresholds = np.full(DOY_COUNT, np.nan)
@@ -39,13 +34,8 @@ def compute_thresholds(tmax: pd.Series) -> pd.Series:
 
 
 def _validate_series(tmax: pd.Series) -> None:
-    index = tmax.index
-    if not isinstance(index, pd.DatetimeIndex):
-        raise ThresholdError("tmax must have a DatetimeIndex.")
-    if index.has_duplicates:
-        raise ThresholdError("tmax index must not contain duplicate dates.")
-    if not index.is_monotonic_increasing:
-        raise ThresholdError("tmax index must be sorted.")
+    if not is_sorted_datetime_index(tmax.index):
+        raise AppError.unavailable()
 
 
 def _baseline_matrix(baseline: pd.Series) -> np.ndarray:

@@ -1,11 +1,12 @@
 import numpy as np
 import pandas as pd
 
+from app.engine.cleaning import is_sorted_datetime_index
 from app.engine.thresholds import DOY_COUNT, leap_aligned_doy
+from app.errors import AppError
 
 MIN_EVENT_DAYS = 3
-
-_COLUMNS = [
+EVENT_COLUMNS = [
     "start",
     "end",
     "year",
@@ -17,17 +18,13 @@ _COLUMNS = [
 ]
 
 
-class EventError(ValueError):
-    pass
-
-
 def detect_events(tmax: pd.Series, thresholds: pd.Series) -> pd.DataFrame:
     _validate_inputs(tmax, thresholds)
     values = tmax.to_numpy(dtype=float)
     day_threshold = thresholds.to_numpy(dtype=float)[leap_aligned_doy(tmax.index) - 1]
     exceed = values > day_threshold
     if not exceed.any():
-        return _empty_events(tmax.index)
+        return empty_events(tmax.index)
     consecutive = np.diff(tmax.index.values).astype("timedelta64[D]").astype(int) == 1
     continues = np.zeros(len(tmax), dtype=bool)
     continues[1:] = exceed[1:] & exceed[:-1] & consecutive
@@ -55,28 +52,25 @@ def detect_events(tmax: pd.Series, thresholds: pd.Series) -> pd.DataFrame:
     )
     events = events[events["duration_days"] >= MIN_EVENT_DAYS].copy()
     events["year"] = events["start"].dt.year.astype("int64")
-    return events.loc[:, _COLUMNS].sort_values("start").reset_index(drop=True)
+    return events.loc[:, EVENT_COLUMNS].sort_values("start").reset_index(drop=True)
 
 
 def _validate_inputs(tmax: pd.Series, thresholds: pd.Series) -> None:
-    index = tmax.index
-    if not isinstance(index, pd.DatetimeIndex):
-        raise EventError("tmax must have a DatetimeIndex.")
-    if index.has_duplicates:
-        raise EventError("tmax index must not contain duplicate dates.")
-    if not index.is_monotonic_increasing:
-        raise EventError("tmax index must be sorted.")
+    if not is_sorted_datetime_index(tmax.index):
+        raise AppError.internal()
     if len(thresholds) != DOY_COUNT or not np.array_equal(
         np.asarray(thresholds.index), np.arange(1, DOY_COUNT + 1)
     ):
-        raise EventError("thresholds must be indexed by day-of-year 1..366.")
+        raise AppError.internal()
 
 
-def _empty_events(index: pd.DatetimeIndex) -> pd.DataFrame:
+def empty_events(index: pd.DatetimeIndex | None = None) -> pd.DataFrame:
+    dates = index[:0] if index is not None else pd.Series(dtype="datetime64[ns]")
+    empty_dates = dates if index is not None else pd.Series(dtype="datetime64[ns]")
     return pd.DataFrame(
         {
-            "start": index[:0],
-            "end": index[:0],
+            "start": dates,
+            "end": empty_dates,
             "year": pd.Series(dtype="int64"),
             "duration_days": pd.Series(dtype="int64"),
             "peak_tmax": pd.Series(dtype="float64"),

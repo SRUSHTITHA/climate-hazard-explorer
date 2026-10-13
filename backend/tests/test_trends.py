@@ -9,7 +9,8 @@ from app.engine import trends
 from app.engine.events import detect_events
 from app.engine.metrics import annual_metrics
 from app.engine.thresholds import compute_thresholds
-from app.engine.trends import TrendError, rolling_mean, trend, trend_table
+from app.engine.trends import rolling_mean, trend, trend_table
+from app.errors import AppError
 
 
 def _series(values, start: int = 1990, name=None) -> pd.Series:
@@ -212,28 +213,29 @@ def test_trend_table_keeps_zero_counts_and_drops_nan_intensity() -> None:
 def test_trend_table_rejects_missing_columns() -> None:
     index = pd.Index([2000, 2001], name="year")
     frame = pd.DataFrame({"heatwave_days": [1.0, 2.0], "valid": [True, True]}, index=index)
-    with pytest.raises(TrendError):
+    with pytest.raises(AppError):
         trend_table(frame, ("event_count",))
-    with pytest.raises(TrendError):
+    with pytest.raises(AppError):
         trend_table(frame.drop(columns="valid"), ("heatwave_days",))
 
 
-def test_bad_inputs_raise_trend_error() -> None:
-    with pytest.raises(TrendError):
+def test_bad_inputs_raise_app_error() -> None:
+    with pytest.raises(AppError) as excinfo:
         trend("not a series")
-    with pytest.raises(TrendError):
+    assert excinfo.value.code == "internal_error"
+    with pytest.raises(AppError):
         trend(pd.Series([1.0, 2.0], index=pd.Index(["a", "b"])))
-    with pytest.raises(TrendError):
+    with pytest.raises(AppError):
         trend(pd.Series(["a", "b"], index=pd.Index([2000, 2001])))
-    with pytest.raises(TrendError):
+    with pytest.raises(AppError):
         trend(pd.Series([1.0, 2.0], index=pd.Index([2000.0, 2001.0])))
-    with pytest.raises(TrendError):
+    with pytest.raises(AppError):
         trend(pd.Series([1.0, 2.0], index=pd.Index([2000, 2000])))
-    with pytest.raises(TrendError):
+    with pytest.raises(AppError):
         trend(_series([1.0, np.inf, 3.0]))
-    with pytest.raises(TrendError):
+    with pytest.raises(AppError):
         trend(pd.Series([1.0, 2.0], index=pd.Index([2001, 2000])))
-    with pytest.raises(TrendError):
+    with pytest.raises(AppError):
         rolling_mean(_series([1.0, np.inf, 3.0]))
 
 

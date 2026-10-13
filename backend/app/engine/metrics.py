@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
 
-from app.engine.cleaning import MIN_VALID_FRACTION, coverage_by_year
+from app.constants import MAX_CELLS
+from app.engine.cleaning import MIN_VALID_FRACTION, coverage_by_year, days_in_year, is_sorted_datetime_index
+from app.errors import AppError
 
 MIN_CELL_FRACTION = 0.5
-MAX_CELLS = 9
 
-_ANNUAL_COLUMNS = [
+ANNUAL_COLUMNS = [
     "valid_days",
     "total_days",
     "valid",
@@ -18,12 +19,8 @@ _ANNUAL_COLUMNS = [
     "max_exceedance",
     "peak_tmax",
 ]
-_METRIC_COLUMNS = _ANNUAL_COLUMNS[3:]
+_METRIC_COLUMNS = ANNUAL_COLUMNS[3:]
 _REQUIRED_EVENT_COLUMNS = ("start", "duration_days", "intensity", "max_exceedance", "peak_tmax")
-
-
-class MetricsError(ValueError):
-    pass
 
 
 def annual_metrics(tmax: pd.Series, events: pd.DataFrame) -> pd.DataFrame:
@@ -35,14 +32,12 @@ def annual_metrics(tmax: pd.Series, events: pd.DataFrame) -> pd.DataFrame:
     metrics["valid_days"] = (
         tmax.notna().groupby(tmax.index.year).sum().reindex(index).fillna(0).to_numpy(dtype="int64")
     )
-    metrics["total_days"] = np.where(
-        (years % 4 == 0) & ((years % 100 != 0) | (years % 400 == 0)), 366, 365
-    )
+    metrics["total_days"] = np.array([days_in_year(int(year)) for year in years])
     coverage = coverage_by_year(tmax).reindex(index).fillna(0.0)
     metrics["valid"] = coverage >= MIN_VALID_FRACTION
     start_years = events["start"].dt.year
     if not ((start_years >= years[0]) & (start_years <= years[-1])).all():
-        raise MetricsError("Event start years must lie inside the tmax year span.")
+        raise AppError.unavailable()
     grouped = events.groupby(start_years)
     metrics["event_count"] = grouped.size().reindex(index, fill_value=0)
     metrics["heatwave_days"] = grouped["duration_days"].sum().reindex(index, fill_value=0)
@@ -57,12 +52,13 @@ def annual_metrics(tmax: pd.Series, events: pd.DataFrame) -> pd.DataFrame:
 
 
 def region_metrics(per_cell: list[pd.DataFrame], max_cells: int = MAX_CELLS) -> pd.DataFrame:
-    if not isinstance(per_cell, list) or not per_cell:
-        raise MetricsError("per_cell must be a non-empty list of annual_metrics outputs.")
-    if len(per_cell) > max_cells:
-        raise MetricsError(f"A region is limited to {max_cells} cells.")
-    if any("valid" not in cell.columns for cell in per_cell):
-        raise MetricsError("Each cell frame must be an annual_metrics output.")
+    if (
+        not isinstance(per_cell, list)
+        or not per_cell
+        or len(per_cell) > max_cells
+        or any("valid" not in cell.columns for cell in per_cell)
+    ):
+        raise AppError.unavailable()
     cell_count = len(per_cell)
     combined = pd.concat([cell[_METRIC_COLUMNS] for cell in per_cell])
     result = combined.groupby(level=0).mean()
@@ -72,18 +68,11 @@ def region_metrics(per_cell: list[pd.DataFrame], max_cells: int = MAX_CELLS) -> 
 
 
 def _validate_series(tmax: pd.Series) -> None:
-    index = tmax.index
-    if not isinstance(index, pd.DatetimeIndex):
-        raise MetricsError("tmax must have a DatetimeIndex.")
-    if index.has_duplicates:
-        raise MetricsError("tmax index must not contain duplicate dates.")
-    if not index.is_monotonic_increasing:
-        raise MetricsError("tmax index must be sorted.")
+    if not is_sorted_datetime_index(tmax.index):
+        raise AppError.unavailable()
 
 
 def _validate_events(events: pd.DataFrame) -> None:
     missing = [column for column in _REQUIRED_EVENT_COLUMNS if column not in events.columns]
-    if missing:
-        raise MetricsError(f"events is missing required column(s): {', '.join(missing)}.")
-    if not pd.api.types.is_datetime64_any_dtype(events["start"]):
-        raise MetricsError("events start column must be datetime64.")
+    if missing or not pd.api.types.is_datetime64_any_dtype(events["start"]):
+        raise AppError.unavailable()

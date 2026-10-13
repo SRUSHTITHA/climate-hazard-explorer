@@ -10,9 +10,9 @@ from pymongo.errors import DuplicateKeyError
 
 from app.db import get_db
 from app.engine.cleaning import days_in_year
+from app.errors import AppError
 from app.main import app
 from app.services import storage
-from app.services.regions import RegionError
 
 _CELL = "28.50_77.25"
 _GRID_LAT = 28.5
@@ -250,8 +250,9 @@ def test_upsert_docs_writes_many_docs() -> None:
 
 @pytest.mark.parametrize("bad_cell", ["abc", "999.00_0.00", {"$ne": None}])
 def test_invalid_cell_id_rejected_before_database_touch(bad_cell) -> None:
-    with pytest.raises(RegionError):
+    with pytest.raises(AppError) as excinfo:
         _save(_RaisingDatabase(), 2024, cell=bad_cell)
+    assert excinfo.value.code == "invalid_region"
 
 
 def test_startup_ensures_indexes_and_health_up() -> None:

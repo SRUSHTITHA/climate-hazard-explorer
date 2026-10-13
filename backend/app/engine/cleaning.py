@@ -60,6 +60,14 @@ def _parse_index(dates: list[str]) -> pd.DatetimeIndex:
         raise ValueError("dates must not contain duplicates.")
     return index
 
+def is_sorted_datetime_index(index: pd.Index) -> bool:
+    return (
+        isinstance(index, pd.DatetimeIndex)
+        and not index.has_duplicates
+        and index.is_monotonic_increasing
+    )
+
+
 def days_in_year(year: int) -> int:
     return (dt.date(year, 12, 31) - dt.date(year, 1, 1)).days + 1
 

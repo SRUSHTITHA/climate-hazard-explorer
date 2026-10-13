@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 
 from app.engine.trends import MIN_VALID_YEARS
+from app.errors import AppError
 
 DATA_SOURCE = "Data: ERA5 reanalysis via Open-Meteo"
-
 _EVIDENCE_LEVELS = ("strong", "weak", "none", "insufficient")
 _HEADLINE_KEYS = (
     "n_years",
@@ -15,14 +15,7 @@ _HEADLINE_KEYS = (
     "last_mean",
     "pct_change",
 )
-_INTENSITY_KEYS = (
-    "n_years",
-    "evidence",
-    "direction",
-    "slope_per_decade",
-    "first_mean",
-    "last_mean",
-)
+_INTENSITY_KEYS = _HEADLINE_KEYS[:-1]
 _REGION_COLUMNS = ("heatwave_days", "valid", "n_cells_valid")
 _VERBS = {"increasing": "increased", "decreasing": "decreased"}
 
@@ -70,17 +63,13 @@ _TEMPLATES = {
 }
 
 
-class InsightError(ValueError):
-    pass
-
-
 def build_insights(
     hazard: str, region_name: str, region_df: pd.DataFrame, trends: dict[str, dict]
 ) -> list[dict]:
     _validate_inputs(region_df, trends)
-    insights = [_headline(hazard, region_name, trends["heatwave_days"])]
+    insights = [_from_trend("headline", hazard, region_name, trends["heatwave_days"], True)]
     if "mean_intensity" in trends:
-        insights.append(_intensity(hazard, region_name, trends["mean_intensity"]))
+        insights.append(_from_trend("intensity", hazard, region_name, trends["mean_intensity"], False))
     peak = _peak_year(hazard, region_name, region_df)
     if peak is not None:
         insights.append(peak)
@@ -88,43 +77,30 @@ def build_insights(
     return insights
 
 
-def _headline(hazard: str, region_name: str, trend: dict) -> dict:
+def _from_trend(
+    key: str, hazard: str, region_name: str, trend: dict, with_percent: bool
+) -> dict:
     evidence = trend["evidence"]
+    prefix = "headline" if with_percent else "intensity"
     fields = {"region": region_name, "hazard": hazard}
     if evidence == "insufficient":
         fields.update(n_years=trend["n_years"], min_years=MIN_VALID_YEARS)
-        return _insight("headline", "caution", _TEMPLATES["headline_insufficient"].format(**fields))
+        return _insight(key, "caution", _TEMPLATES[f"{prefix}_insufficient"].format(**fields))
     if evidence == "none":
-        return _insight("headline", "caution", _TEMPLATES["headline_none"].format(**fields))
+        return _insight(key, "caution", _TEMPLATES[f"{prefix}_none"].format(**fields))
     fields["verb"] = _verb(trend["direction"])
-    fields["slope"] = abs(_finite("slope_per_decade", trend["slope_per_decade"]))
+    fields["slope"] = abs(_finite(trend["slope_per_decade"]))
     if evidence == "weak":
-        return _insight("headline", "caution", _TEMPLATES["headline_weak"].format(**fields))
-    fields["first"] = _finite("first_mean", trend["first_mean"])
-    fields["last"] = _finite("last_mean", trend["last_mean"])
+        return _insight(key, "caution", _TEMPLATES[f"{prefix}_weak"].format(**fields))
+    fields["first"] = _finite(trend["first_mean"])
+    fields["last"] = _finite(trend["last_mean"])
+    if not with_percent:
+        return _insight(key, "info", _TEMPLATES["intensity_strong"].format(**fields))
     percent = _percent(trend["pct_change"])
     if percent is None:
-        return _insight("headline", "info", _TEMPLATES["headline_strong_absolute"].format(**fields))
+        return _insight(key, "info", _TEMPLATES["headline_strong_absolute"].format(**fields))
     fields["pct"] = percent
-    return _insight("headline", "info", _TEMPLATES["headline_strong_percent"].format(**fields))
-
-
-def _intensity(hazard: str, region_name: str, trend: dict) -> dict:
-    evidence = trend["evidence"]
-    fields = {"region": region_name, "hazard": hazard}
-    if evidence == "insufficient":
-        fields.update(n_years=trend["n_years"], min_years=MIN_VALID_YEARS)
-        text = _TEMPLATES["intensity_insufficient"].format(**fields)
-        return _insight("intensity", "caution", text)
-    if evidence == "none":
-        return _insight("intensity", "caution", _TEMPLATES["intensity_none"].format(**fields))
-    fields["verb"] = _verb(trend["direction"])
-    fields["slope"] = abs(_finite("slope_per_decade", trend["slope_per_decade"]))
-    if evidence == "weak":
-        return _insight("intensity", "caution", _TEMPLATES["intensity_weak"].format(**fields))
-    fields["first"] = _finite("first_mean", trend["first_mean"])
-    fields["last"] = _finite("last_mean", trend["last_mean"])
-    return _insight("intensity", "info", _TEMPLATES["intensity_strong"].format(**fields))
+    return _insight(key, "info", _TEMPLATES["headline_strong_percent"].format(**fields))
 
 
 def _peak_year(hazard: str, region_name: str, region_df: pd.DataFrame) -> dict | None:
@@ -166,13 +142,13 @@ def _insight(key: str, level: str, text: str) -> dict:
 
 def _verb(direction: str) -> str:
     if direction not in _VERBS:
-        raise InsightError(f"Unknown direction: {direction!r}.")
+        raise AppError.internal()
     return _VERBS[direction]
 
 
-def _finite(name: str, value: float) -> float:
+def _finite(value: float) -> float:
     if value is None or not np.isfinite(value):
-        raise InsightError(f"Trend {name} must be a finite number.")
+        raise AppError.internal()
     return float(value)
 
 
@@ -187,20 +163,16 @@ def _percent(value: float | None) -> float | None:
 
 def _validate_inputs(region_df: pd.DataFrame, trends: dict[str, dict]) -> None:
     if not isinstance(trends, dict) or "heatwave_days" not in trends:
-        raise InsightError("trends must contain a heatwave_days trend.")
-    _validate_trend("heatwave_days", trends["heatwave_days"], _HEADLINE_KEYS)
+        raise AppError.internal()
+    _validate_trend(trends["heatwave_days"], _HEADLINE_KEYS)
     if "mean_intensity" in trends:
-        _validate_trend("mean_intensity", trends["mean_intensity"], _INTENSITY_KEYS)
-    if not isinstance(region_df, pd.DataFrame):
-        raise InsightError("region_df must be a DataFrame.")
-    missing = [column for column in _REGION_COLUMNS if column not in region_df.columns]
-    if missing:
-        raise InsightError(f"region_df is missing column(s): {', '.join(missing)}.")
+        _validate_trend(trends["mean_intensity"], _INTENSITY_KEYS)
+    if not isinstance(region_df, pd.DataFrame) or any(
+        column not in region_df.columns for column in _REGION_COLUMNS
+    ):
+        raise AppError.internal()
 
 
-def _validate_trend(name: str, trend: dict, keys: tuple[str, ...]) -> None:
-    missing = [key for key in keys if key not in trend]
-    if missing:
-        raise InsightError(f"trend {name} is missing key(s): {', '.join(missing)}.")
-    if trend["evidence"] not in _EVIDENCE_LEVELS:
-        raise InsightError(f"trend {name} has unknown evidence: {trend['evidence']!r}.")
+def _validate_trend(trend: dict, keys: tuple[str, ...]) -> None:
+    if any(key not in trend for key in keys) or trend["evidence"] not in _EVIDENCE_LEVELS:
+        raise AppError.internal()

@@ -12,12 +12,14 @@ from pydantic import (
     model_validator,
 )
 
+from app.constants import HISTORY_START, MAX_CELLS
 from app.engine.insights import DATA_SOURCE
-from app.services.ingestion import HISTORY_START
-from app.services.regions import MAX_CELLS, RegionError, cell_id, cells_in_box
+from app.errors import FORBIDDEN_MESSAGE_PARTS, AppError
+from app.services.regions import cell_id, cells_in_box
 
 MIN_RANGE_YEARS = 10
 MAX_SERIES_YEARS = 100
+MAX_EVENTS = 300
 
 Hazard = Literal["heatwave"]
 Evidence = Literal["strong", "weak", "none", "insufficient"]
@@ -25,23 +27,17 @@ Direction = Literal["increasing", "decreasing", "flat"]
 InsightLevel = Literal["info", "caution"]
 TrendKey = Literal["heatwave_days", "mean_intensity"]
 
-_FORBIDDEN_MESSAGE_PARTS = ("http", "mongodb", "/", "\\", "traceback")
-
-
 def _finite_or_none(value: object) -> object:
     if isinstance(value, float) and not math.isfinite(value):
         return None
     return value
 
-
 NullableFloat = Annotated[float | None, BeforeValidator(_finite_or_none)]
 Coordinate = Annotated[float | None, Field(allow_inf_nan=False)]
 CellId = Annotated[str, StringConstraints(min_length=1, max_length=16)]
 
-
 class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
 
 class AnalysisRequest(_Model):
     hazard: Hazard = "heatwave"
@@ -65,7 +61,6 @@ class AnalysisRequest(_Model):
     @property
     def cell_ids(self) -> list[str]:
         return list(self._cell_ids)
-
 
 class TrendOut(_Model):
     n_years: int
@@ -91,19 +86,28 @@ class YearPoint(_Model):
     n_cells_valid: int
     rolling_heatwave_days: NullableFloat = None
 
-
 class InsightOut(_Model):
     key: Annotated[str, StringConstraints(min_length=1, max_length=32)]
     level: InsightLevel
     text: Annotated[str, StringConstraints(min_length=1, max_length=1000)]
-
 
 class QualityOut(_Model):
     valid_years: int
     total_years: int
     cells: int
     min_cells_valid: int
+    events_total: int
 
+class EventOut(_Model):
+    cell_id: CellId
+    start: str
+    end: str
+    year: int
+    duration_days: int
+    peak_tmax: NullableFloat = None
+    mean_tmax: NullableFloat = None
+    intensity: NullableFloat = None
+    max_exceedance: NullableFloat = None
 
 class AnalysisResponse(_Model):
     hazard: Hazard
@@ -114,8 +118,8 @@ class AnalysisResponse(_Model):
     trends: dict[TrendKey, TrendOut]
     insights: list[InsightOut]
     quality: QualityOut
+    events: Annotated[list[EventOut], Field(max_length=MAX_EVENTS)]
     attribution: Annotated[str, StringConstraints(min_length=1, max_length=100)] = DATA_SOURCE
-
 
 class ErrorResponse(_Model):
     code: Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$", max_length=40)]
@@ -125,10 +129,9 @@ class ErrorResponse(_Model):
     @classmethod
     def _safe_message(cls, message: str) -> str:
         lowered = message.lower()
-        if any(part in lowered for part in _FORBIDDEN_MESSAGE_PARTS):
+        if any(part in lowered for part in FORBIDDEN_MESSAGE_PARTS):
             raise ValueError("message must not contain URLs, paths, credentials or stack traces.")
         return message
-
 
 def _validate_years(request: AnalysisRequest) -> None:
     if request.start_year < HISTORY_START:
@@ -137,7 +140,6 @@ def _validate_years(request: AnalysisRequest) -> None:
         raise ValueError("end_year must not be earlier than start_year.")
     if request.end_year - request.start_year + 1 < MIN_RANGE_YEARS:
         raise ValueError(f"The year range must span at least {MIN_RANGE_YEARS} years.")
-
 
 def _resolve_region(request: AnalysisRequest) -> list[str]:
     point = (request.lat, request.lon)
@@ -153,7 +155,7 @@ def _resolve_region(request: AnalysisRequest) -> list[str]:
             raise ValueError("A point requires both lat and lon.")
         try:
             return [cell_id(request.lat, request.lon)]
-        except RegionError as exc:
+        except AppError as exc:
             raise ValueError(str(exc)) from None
     if box_count:
         if box_count != 4:
@@ -162,6 +164,6 @@ def _resolve_region(request: AnalysisRequest) -> list[str]:
             raise ValueError("A box requires south < north and west < east.")
         try:
             return cells_in_box(request.south, request.west, request.north, request.east)
-        except RegionError as exc:
+        except AppError as exc:
             raise ValueError(str(exc)) from None
     raise ValueError("Specify a point (lat, lon) or a box (south, west, north, east).")

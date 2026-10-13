@@ -3,7 +3,8 @@ import time
 
 import pytest
 
-from app.services.regions import RegionError, cell_center, cell_id, cells_in_box
+from app.errors import AppError
+from app.services.regions import cell_center, cell_id, cells_in_box
 
 
 @pytest.mark.parametrize(
@@ -32,8 +33,9 @@ def test_cell_id_snaps_to_canonical_id(lat: float, lon: float, expected: str) ->
     ],
 )
 def test_cell_id_rejects_invalid_coordinates(lat: float, lon: float) -> None:
-    with pytest.raises(RegionError):
+    with pytest.raises(AppError) as excinfo:
         cell_id(lat, lon)
+    assert excinfo.value.code == "invalid_region"
 
 
 def test_cells_in_box_returns_all_cells_in_ascending_order() -> None:
@@ -57,7 +59,7 @@ def test_cells_in_box_cap_boundary_is_allowed() -> None:
 
 
 def test_cells_in_box_exceeding_cap_raises() -> None:
-    with pytest.raises(RegionError):
+    with pytest.raises(AppError):
         cells_in_box(10, 70, 10.75, 70.5)
 
 
@@ -72,13 +74,13 @@ def test_cells_in_box_exceeding_cap_raises() -> None:
 def test_cells_in_box_rejects_inverted_or_invalid_box(
     south: float, west: float, north: float, east: float
 ) -> None:
-    with pytest.raises(RegionError):
+    with pytest.raises(AppError):
         cells_in_box(south, west, north, east)
 
 
 def test_cells_in_box_world_bbox_rejected_instantly() -> None:
     start = time.perf_counter()
-    with pytest.raises(RegionError):
+    with pytest.raises(AppError):
         cells_in_box(-90, -180, 90, 180)
     assert time.perf_counter() - start < 0.1
 
@@ -94,5 +96,5 @@ def test_cell_center_round_trips_to_snapped_coordinates() -> None:
     ["abc", "28.50", "999.00_0.00", "28.50_77.25_1", "x_y"],
 )
 def test_cell_center_rejects_invalid_ids(value: str) -> None:
-    with pytest.raises(RegionError):
+    with pytest.raises(AppError):
         cell_center(value)

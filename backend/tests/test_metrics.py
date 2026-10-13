@@ -4,8 +4,9 @@ import pytest
 
 from app.engine.cleaning import MIN_VALID_FRACTION
 from app.engine.events import detect_events
-from app.engine.metrics import MetricsError, annual_metrics, region_metrics
+from app.engine.metrics import annual_metrics, region_metrics
 from app.engine.thresholds import compute_thresholds
+from app.errors import AppError
 
 
 def _daily(start_year: int, end_year: int) -> pd.DatetimeIndex:
@@ -82,8 +83,10 @@ _METRIC_COLUMNS = [
 ]
 
 
-def test_metrics_error_is_a_typed_value_error() -> None:
-    assert issubclass(MetricsError, ValueError)
+def test_metrics_error_is_an_app_error_with_code() -> None:
+    with pytest.raises(AppError) as excinfo:
+        region_metrics([])
+    assert excinfo.value.code == "data_unavailable"
 
 
 def test_year_with_three_events_hand_computed() -> None:
@@ -218,25 +221,25 @@ def test_total_days_match_reference_lengths() -> None:
 
 
 def test_unsorted_index_raises() -> None:
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         annual_metrics(_constant(2000, 2001)[::-1], _events())
 
 
 def test_duplicate_index_raises() -> None:
     duplicate = pd.concat([_constant(2000, 2000), _constant(2000, 2000).iloc[[0]]])
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         annual_metrics(duplicate, _events())
 
 
 def test_events_missing_column_raises() -> None:
     events = _events(_event("2000-07-01", 3, 2.0, 3.0, 36.0)).drop(columns=["intensity"])
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         annual_metrics(_constant(2000, 2001), events)
 
 
 def test_events_start_column_not_datetime_raises() -> None:
     events = _events(_event("2000-07-01", 3, 2.0, 3.0, 36.0)).assign(start=["2000-07-01"])
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         annual_metrics(_constant(2000, 2001), events)
 
 
@@ -260,9 +263,9 @@ def test_empty_events_with_correct_columns() -> None:
 
 
 def test_event_start_year_outside_span_raises() -> None:
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         annual_metrics(_constant(1990, 2025), _events(_event("2026-07-01", 3, 2.0, 3.0, 36.0)))
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         annual_metrics(_constant(1990, 2025), _events(_event("1989-07-01", 3, 2.0, 3.0, 36.0)))
 
 
@@ -345,15 +348,15 @@ def test_region_schema_order_and_dtypes() -> None:
 
 
 def test_region_rejects_empty_too_many_and_malformed() -> None:
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         region_metrics([])
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         region_metrics([pd.DataFrame({"x": [1]})])
     cells = [annual_metrics(_constant(2000, 2000), _events()) for _ in range(9)]
     assert not region_metrics(cells).empty
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         region_metrics(cells + [annual_metrics(_constant(2000, 2000), _events())])
-    with pytest.raises(MetricsError):
+    with pytest.raises(AppError):
         region_metrics(cells[:4], max_cells=3)
 
 

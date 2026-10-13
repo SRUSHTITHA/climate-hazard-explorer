@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.engine.events import EventError, detect_events
+from app.engine.events import detect_events
 from app.engine.thresholds import DOY_COUNT, compute_thresholds
+from app.errors import AppError
 
 
 def _thresholds(overrides: dict[int, float] | None = None, default: float = 30.0) -> pd.Series:
@@ -18,8 +19,10 @@ def _daily(values: list[float], start: str = "2020-01-01") -> pd.Series:
     return pd.Series(values, index=index, dtype="float64")
 
 
-def test_event_error_is_a_typed_value_error() -> None:
-    assert issubclass(EventError, ValueError)
+def test_event_error_is_an_app_error_with_code() -> None:
+    with pytest.raises(AppError) as excinfo:
+        detect_events(pd.Series([31.0]), _thresholds())
+    assert excinfo.value.code == "internal_error"
 
 
 def test_two_exceeding_days_is_not_an_event() -> None:
@@ -150,29 +153,29 @@ def test_inputs_not_mutated_and_calls_equal() -> None:
 
 
 def test_non_datetime_index_raises() -> None:
-    with pytest.raises(EventError):
+    with pytest.raises(AppError):
         detect_events(pd.Series([31.0, 31.0, 31.0]), _thresholds())
 
 
 def test_unsorted_index_raises() -> None:
     index = pd.DatetimeIndex(["2020-01-02", "2020-01-01", "2020-01-03"])
-    with pytest.raises(EventError):
+    with pytest.raises(AppError):
         detect_events(pd.Series([31.0, 31.0, 31.0], index=index), _thresholds())
 
 
 def test_duplicate_index_raises() -> None:
     index = pd.DatetimeIndex(["2020-01-01", "2020-01-01", "2020-01-02"])
-    with pytest.raises(EventError):
+    with pytest.raises(AppError):
         detect_events(pd.Series([31.0, 31.0, 31.0], index=index), _thresholds())
 
 
 def test_thresholds_wrong_length_raises() -> None:
-    with pytest.raises(EventError):
+    with pytest.raises(AppError):
         detect_events(_daily([31.0]), pd.Series(np.zeros(365), index=np.arange(1, 366)))
 
 
 def test_thresholds_wrong_index_raises() -> None:
-    with pytest.raises(EventError):
+    with pytest.raises(AppError):
         detect_events(_daily([31.0]), pd.Series(np.zeros(DOY_COUNT), index=np.arange(DOY_COUNT)))
 
 

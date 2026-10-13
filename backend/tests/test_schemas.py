@@ -7,11 +7,12 @@ import pytest
 from fastapi import FastAPI, Query
 from pydantic import ValidationError
 
-from app.engine.events import EventError, detect_events
-from app.engine.insights import InsightError, build_insights
-from app.engine.metrics import MetricsError, annual_metrics, region_metrics
-from app.engine.thresholds import ThresholdError, compute_thresholds
-from app.engine.trends import TrendError, rolling_mean, trend_table
+from app.engine.events import detect_events
+from app.engine.insights import build_insights
+from app.engine.metrics import annual_metrics, region_metrics
+from app.engine.thresholds import compute_thresholds
+from app.engine.trends import rolling_mean, trend_table
+from app.errors import AppError
 from app.models.schemas import (
     MAX_SERIES_YEARS,
     AnalysisRequest,
@@ -22,9 +23,9 @@ from app.models.schemas import (
     TrendOut,
     YearPoint,
 )
-from app.services.ingestion import HISTORY_START, IngestError
-from app.services.open_meteo import UPSTREAM_ERROR_MESSAGE, UpstreamError
-from app.services.regions import RegionError, cell_id, cells_in_box
+from app.services.ingestion import HISTORY_START
+from app.services.open_meteo import UPSTREAM_ERROR_MESSAGE
+from app.services.regions import cell_id, cells_in_box
 
 
 def _point(**over: object) -> AnalysisRequest:
@@ -220,11 +221,13 @@ def test_analysis_response_round_trips_strict_json() -> None:
         series=series,
         trends=trends,
         insights=insights,
+        events=[],
         quality=QualityOut(
             valid_years=int(region["valid"].sum()),
             total_years=len(region),
             cells=1,
             min_cells_valid=int(region["n_cells_valid"].min()),
+            events_total=0,
         ),
     )
     dumped = response.model_dump(mode="json")
@@ -245,11 +248,13 @@ def test_analysis_response_matches_engine_outputs() -> None:
         series=series,
         trends=trends,
         insights=insights,
+        events=[],
         quality=QualityOut(
             valid_years=int(region["valid"].sum()),
             total_years=len(region),
             cells=1,
             min_cells_valid=int(region["n_cells_valid"].min()),
+            events_total=0,
         ),
     )
     engine_trend = trends["heatwave_days"]
@@ -314,7 +319,10 @@ def test_response_nan_in_every_float_field() -> None:
         series=[point],
         trends={"heatwave_days": trend},
         insights=[],
-        quality=QualityOut(valid_years=1, total_years=1, cells=1, min_cells_valid=1),
+        events=[],
+        quality=QualityOut(
+            valid_years=1, total_years=1, cells=1, min_cells_valid=1, events_total=0
+        ),
     )
     dumped = json.dumps(response.model_dump(mode="json"), allow_nan=False)
     assert "null" in dumped
@@ -337,7 +345,14 @@ def test_literal_and_list_bounds_enforced() -> None:
         "start_year": 2000,
         "end_year": 2019,
         "insights": [],
-        "quality": {"valid_years": 1, "total_years": 1, "cells": 1, "min_cells_valid": 1},
+        "events": [],
+        "quality": {
+            "valid_years": 1,
+            "total_years": 1,
+            "cells": 1,
+            "min_cells_valid": 1,
+            "events_total": 0,
+        },
     }
     with pytest.raises(ValidationError):
         AnalysisResponse(cell_ids=["28.50_77.25"], series=too_many_years, trends={}, **base)
@@ -356,20 +371,33 @@ def test_oversized_strings_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    "error",
+    ("error", "expected_code"),
     [
-        RegionError("Coordinates must be finite numbers."),
-        UpstreamError(UPSTREAM_ERROR_MESSAGE),
-        IngestError("Fetched daily series is malformed."),
-        ThresholdError("tmax must have a DatetimeIndex."),
-        EventError("tmax must have a DatetimeIndex."),
-        MetricsError("A region is limited to 9 cells."),
-        TrendError("series must be a numeric pandas Series."),
-        InsightError("region_df must be a DataFrame."),
+        (
+            AppError("invalid_region", "The request parameters are invalid.", status=400),
+            "invalid_region",
+        ),
+        (AppError("upstream_error", UPSTREAM_ERROR_MESSAGE, status=502), "upstream_error"),
+        (
+            AppError(
+                "data_unavailable",
+                "Not enough data is available to compute the analysis.",
+                status=502,
+            ),
+            "data_unavailable",
+        ),
+        (
+            AppError(
+                "internal_error",
+                "An internal error occurred while computing the analysis.",
+                status=500,
+            ),
+            "internal_error",
+        ),
     ],
-    ids=lambda error: type(error).__name__,
 )
-def test_error_response_message_is_safe(error: Exception) -> None:
+def test_error_response_message_is_safe(error: AppError, expected_code: str) -> None:
+    assert error.code == expected_code
     response = ErrorResponse(code="analysis_error", message=str(error))
     lowered = response.message.lower()
     assert "http" not in lowered

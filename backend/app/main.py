@@ -2,7 +2,6 @@ import hashlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,16 +10,18 @@ from slowapi.middleware import _should_exempt, sync_check_limits
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.routing import Match
-
 from app.api.analysis import router as analysis_router
 from app.api.errors import (
+    app_error_handler,
     http_exception_handler,
     limiter,
     rate_limit_handler,
     request_validation_handler,
     unhandled_exception_handler,
 )
+from app.errors import AppError
 from app.api.health import router as health_router
+from app.api.regions import router as regions_router
 from app.config import Settings, get_settings
 from app.db import get_db
 from app.services.storage import ensure_indexes
@@ -32,7 +33,6 @@ _HARDENING_HEADERS = {
     "Referrer-Policy": "no-referrer",
 }
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
@@ -40,7 +40,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         _LOGGER.warning("Could not create indexes on startup.", exc_info=True)
     yield
-
 
 class HardeningMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: FastAPI, max_age: int = _CACHE_MAX_AGE) -> None:
@@ -73,7 +72,6 @@ class HardeningMiddleware(BaseHTTPMiddleware):
         headers["Cache-Control"] = cache_control
         return Response(content=body, status_code=200, headers=headers)
 
-
 def _find_endpoint(routes: list, scope: dict) -> object | None:
     handler = None
     for route in routes:
@@ -85,7 +83,6 @@ def _find_endpoint(routes: list, scope: dict) -> object | None:
         if endpoint is not None and route.matches(scope)[0] == Match.FULL:
             handler = endpoint
     return handler
-
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -101,7 +98,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             response = rate_limiter._inject_headers(response, request.state.view_rate_limit)
         return response
 
-
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     app = FastAPI(title="Climate Hazard Explorer", lifespan=lifespan)
@@ -109,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(RequestValidationError, request_validation_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+    app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
@@ -122,7 +119,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(HardeningMiddleware)
     app.include_router(health_router)
     app.include_router(analysis_router)
+    app.include_router(regions_router)
     return app
-
-
 app = create_app()

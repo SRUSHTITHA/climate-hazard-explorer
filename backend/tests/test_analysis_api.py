@@ -6,19 +6,10 @@ import pytest
 from fastapi.testclient import TestClient
 from pymongo.errors import ServerSelectionTimeoutError
 
-from app.api import analysis as api_analysis
 from app.db import get_db
-from app.engine.events import EventError
-from app.engine.insights import InsightError
-from app.engine.metrics import MetricsError
-from app.engine.thresholds import ThresholdError
-from app.engine.trends import TrendError
+from app.errors import AppError
 from app.main import app
 from app.services import ingestion, open_meteo, storage
-from app.services.analysis import AnalysisError
-from app.services.ingestion import IngestError
-from app.services.open_meteo import UpstreamError
-from app.services.regions import RegionError
 
 HISTORY_START = ingestion.HISTORY_START
 LAST_FULL = 2025
@@ -47,7 +38,11 @@ def _install_fetch(monkeypatch: pytest.MonkeyPatch, fail=frozenset()) -> list:
     def fake(cell_id: str, start_year: int, end_year: int, client=None):
         calls.append((cell_id, start_year, end_year))
         if cell_id in fail:
-            raise UpstreamError("Weather data is temporarily unavailable.")
+            raise AppError(
+                "upstream_error",
+                open_meteo.UPSTREAM_ERROR_MESSAGE,
+                status=502,
+            )
         return _payload(start_year, end_year)
 
     monkeypatch.setattr(open_meteo, "fetch_daily_tmax", fake)
@@ -57,6 +52,11 @@ def _install_fetch(monkeypatch: pytest.MonkeyPatch, fail=frozenset()) -> list:
 class _BrokenDatabase:
     def __getitem__(self, name: str) -> None:
         raise ServerSelectionTimeoutError("no server")
+
+
+class _UnexpectedDatabase:
+    def __getitem__(self, name: str) -> None:
+        raise RuntimeError("private database details")
 
 
 @pytest.fixture
@@ -116,6 +116,16 @@ def test_database_failure_returns_503(client) -> None:
     assert response.json()["code"] == "database_unavailable"
 
 
+def test_unexpected_analysis_failure_returns_safe_500(client) -> None:
+    app.dependency_overrides[get_db] = lambda: _UnexpectedDatabase()
+    response = client.get("/api/analysis", params=_PARAMS)
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "internal_error",
+        "message": "An internal error occurred while computing the analysis.",
+    }
+
+
 def test_schema_validation_error_returns_safe_400_body(client) -> None:
     response = client.get(
         "/api/analysis", params={"lat": 28.6, "lon": 77.2, "start_year": 2015, "end_year": 2020}
@@ -140,36 +150,33 @@ def test_unknown_extra_query_param_is_rejected(client) -> None:
     assert response.json()["code"] == "invalid_request"
 
 
-def test_openapi_exposes_exactly_health_and_analysis(client) -> None:
+def test_openapi_exposes_exactly_health_analysis_and_regions(client) -> None:
     paths = set(client.get("/openapi.json").json()["paths"])
-    assert paths == {"/health", "/api/analysis"}
+    assert paths == {"/health", "/api/analysis", "/api/regions"}
 
 
 @pytest.mark.parametrize(
-    ("exc", "status"),
+    ("exc", "status", "code"),
     [
-        (AnalysisError("year_out_of_range", "msg"), 400),
-        (AnalysisError("data_unavailable", "msg"), 502),
-        (AnalysisError("unexpected_code", "msg"), 500),
-        (UpstreamError("upstream"), 502),
-        (IngestError("ingest"), 502),
-        (ThresholdError("threshold"), 502),
-        (MetricsError("metrics"), 502),
-        (LookupError("lookup"), 502),
-        (ServerSelectionTimeoutError("mongo"), 503),
-        (RegionError("region"), 400),
-        (EventError("event"), 500),
-        (TrendError("trend"), 500),
-        (InsightError("insight"), 500),
-        (ValueError("value"), 400),
-        (RuntimeError("runtime"), 500),
+        (AppError("year_out_of_range", "msg", status=400), 400, "year_out_of_range"),
+        (AppError("data_unavailable", "msg", status=502), 502, "data_unavailable"),
+        (AppError("unexpected_code", "msg", status=500), 500, "unexpected_code"),
+        (AppError("upstream_error", "msg", status=502), 502, "upstream_error"),
+        (AppError("invalid_region", "msg", status=400), 400, "invalid_region"),
+        (AppError("internal_error", "msg", status=500), 500, "internal_error"),
     ],
 )
-def test_mapped_error_bodies_are_safe(exc: Exception, status: int) -> None:
-    response = api_analysis._error_response(exc)
+def test_app_error_bodies_preserve_code_and_status(exc: AppError, status: int, code: str) -> None:
+    from starlette.requests import Request
+
+    from app.api.errors import app_error_handler
+
+    request = Request({"type": "http", "method": "GET", "path": "/"})
+    response = app_error_handler(request, exc)
     assert response.status_code == status
     body = json.loads(response.body)
     assert set(body) == {"code", "message"}
+    assert body["code"] == code
     text = json.dumps(body).lower()
     for token in _FORBIDDEN:
         assert token not in text

@@ -1,3 +1,4 @@
+import json
 import math
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -10,7 +11,8 @@ from pydantic import ValidationError
 
 from app.engine import metrics as metrics_engine
 from app.engine import thresholds as thresholds_engine
-from app.engine.thresholds import ThresholdError, compute_thresholds
+from app.engine.thresholds import compute_thresholds
+from app.errors import AppError
 from app.models.schemas import AnalysisRequest, AnalysisResponse
 from app.services import analysis, ingestion, open_meteo, storage
 
@@ -50,7 +52,11 @@ def _install_fetch(monkeypatch: pytest.MonkeyPatch, spike_year=None, fail=frozen
     def fake(cell_id: str, start_year: int, end_year: int, client=None):
         calls.append((cell_id, start_year, end_year))
         if cell_id in fail:
-            raise open_meteo.UpstreamError("Weather data is temporarily unavailable.")
+            raise AppError(
+                "upstream_error",
+                open_meteo.UPSTREAM_ERROR_MESSAGE,
+                status=502,
+            )
         return _payload(start_year, end_year, spike_year)
 
     monkeypatch.setattr(open_meteo, "fetch_daily_tmax", fake)
@@ -158,8 +164,9 @@ def test_range_clipping_leaves_fixed_baseline_thresholds(db, monkeypatch) -> Non
     full = compute_thresholds(storage.load_raw_series(db, CELL, HISTORY_START, LAST_FULL))
     assert np.allclose(_as_float(stored), full.to_numpy(dtype=float), equal_nan=True)
     subset = storage.load_raw_series(db, CELL, HISTORY_START, 2000)
-    with pytest.raises(ThresholdError):
+    with pytest.raises(AppError) as excinfo:
         compute_thresholds(subset)
+    assert excinfo.value.code == "data_unavailable"
 
 
 def test_end_year_equal_to_last_full_year_is_accepted(db, monkeypatch) -> None:
@@ -171,7 +178,7 @@ def test_end_year_equal_to_last_full_year_is_accepted(db, monkeypatch) -> None:
 
 def test_end_year_beyond_last_full_year_raises_year_out_of_range(db, monkeypatch) -> None:
     _install_fetch(monkeypatch)
-    with pytest.raises(analysis.AnalysisError) as excinfo:
+    with pytest.raises(AppError) as excinfo:
         analysis.run_analysis(db, _request(end_year=LAST_FULL + 1))
     assert excinfo.value.code == "year_out_of_range"
     assert db[storage.ANALYSES].count_documents({}) == 0
@@ -203,7 +210,7 @@ def test_one_of_four_cells_failing_still_returns_three_cell_quality(db, monkeypa
 def test_three_of_four_cells_failing_raises_data_unavailable(db, monkeypatch) -> None:
     box = _box_request()
     _install_fetch(monkeypatch, fail=set(box.cell_ids[:3]))
-    with pytest.raises(analysis.AnalysisError) as excinfo:
+    with pytest.raises(AppError) as excinfo:
         analysis.run_analysis(db, box)
     assert excinfo.value.code == "data_unavailable"
     assert db[storage.ANALYSES].count_documents({}) == 0
@@ -362,3 +369,49 @@ def test_annual_metrics_round_trip_restores_nan(db) -> None:
     assert loaded.loc[2000, "heatwave_days"] == 5.0
     assert math.isnan(loaded.loc[2001, "heatwave_days"])
     assert loaded.loc[2001, "valid_days"] == 100
+
+
+def _event_frame(starts: list[str]) -> pd.DataFrame:
+    start = pd.to_datetime(starts)
+    fixed = {"duration_days": 3, "peak_tmax": 40.0, "mean_tmax": 40.0}
+    return pd.DataFrame(
+        {
+            "start": start,
+            "end": start + pd.Timedelta(days=2),
+            "year": start.year,
+            "intensity": 15.0,
+            "max_exceedance": 15.0,
+            **fixed,
+        }
+    )
+
+
+def test_spike_response_lists_one_event_with_five_days(db, monkeypatch) -> None:
+    _install_fetch(monkeypatch, spike_year=2005)
+    events = analysis.run_analysis(db, _request()).events
+    fields = [(e.cell_id, e.start, e.end, e.duration_days, e.year) for e in events]
+    assert fields == [(CELL, "2005-07-01", "2005-07-05", 5, 2005)]
+
+
+def test_event_in_invalid_year_is_excluded() -> None:
+    tmax = pd.Series(25.0, index=pd.date_range("1990-01-01", "2000-12-31"))
+    tmax[tmax.loc["2000"].sample(frac=0.5).index] = np.nan
+    events = _event_frame(["1999-07-01", "2000-07-01"])
+    annual = metrics_engine.annual_metrics(tmax, events)
+    request = AnalysisRequest(lat=28.6, lon=77.2, start_year=1990, end_year=2000)
+    response = analysis._assemble(request, [(CELL, (None, events, annual))])
+    assert [event.year for event in response.events] == [1999]
+
+
+def test_events_are_capped_at_300_with_full_total(db, monkeypatch) -> None:
+    _install_fetch(monkeypatch)
+    starts = list(pd.date_range("1999-01-01", periods=350).strftime("%Y-%m-%d"))
+    monkeypatch.setattr(analysis, "detect_events", lambda *args, **kwargs: _event_frame(starts))
+    response = analysis.run_analysis(db, _request())
+    assert (len(response.events), response.quality.events_total) == (300, 350)
+
+
+def test_response_serialises_with_no_nan(db, monkeypatch) -> None:
+    _install_fetch(monkeypatch, spike_year=2005)
+    response = analysis.run_analysis(db, _request())
+    assert "NaN" not in json.dumps(response.model_dump(mode="json"), allow_nan=False)

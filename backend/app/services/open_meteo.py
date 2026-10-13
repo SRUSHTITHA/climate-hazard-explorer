@@ -3,6 +3,7 @@ import logging
 import time
 from typing import Any
 import httpx
+from app.errors import AppError
 from app.services.regions import cell_center
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -15,8 +16,10 @@ _LOGGER = logging.getLogger(__name__)
 
 UPSTREAM_ERROR_MESSAGE = "Weather data is temporarily unavailable. Please try again later."
 
-class UpstreamError(Exception):
-    pass
+
+def upstream_error() -> AppError:
+    return AppError("upstream_error", UPSTREAM_ERROR_MESSAGE, status=502)
+
 
 def fetch_daily_tmax(
     cell_id: str, start_year: int, end_year: int, client: httpx.Client | None = None
@@ -65,16 +68,16 @@ def _fetch_with_retries(
                 try:
                     data = response.json()
                 except ValueError:
-                    raise UpstreamError(UPSTREAM_ERROR_MESSAGE) from None
+                    raise upstream_error() from None
                 return _validated_payload(data, expected_days)
             _LOGGER.warning(
                 "Open-Meteo returned status %s: %s", response.status_code, response.text
             )
             if response.status_code != 429 and response.status_code < 500:
-                raise UpstreamError(UPSTREAM_ERROR_MESSAGE)
+                raise upstream_error()
             delay = _retry_delay(attempt, response)
         if delay is None:
-            raise UpstreamError(UPSTREAM_ERROR_MESSAGE)
+            raise upstream_error()
         time.sleep(delay)
         attempt += 1
 
@@ -93,7 +96,7 @@ def _retry_delay(attempt: int, response: httpx.Response | None) -> float | None:
 def _validated_payload(data: Any, expected_days: int) -> dict[str, Any]:
     daily = data.get("daily") if isinstance(data, dict) else None
     if not isinstance(daily, dict):
-        raise UpstreamError(UPSTREAM_ERROR_MESSAGE)
+        raise upstream_error()
     times = daily.get("time")
     values = daily.get("temperature_2m_max")
     if (
@@ -102,21 +105,21 @@ def _validated_payload(data: Any, expected_days: int) -> dict[str, Any]:
         or len(times) != len(values)
         or not all(v is None or isinstance(v, (int, float)) for v in values)
     ):
-        raise UpstreamError(UPSTREAM_ERROR_MESSAGE)
+        raise upstream_error()
     units = data.get("daily_units")
     if not isinstance(units, dict) or units.get("temperature_2m_max") != "°C":
-        raise UpstreamError(UPSTREAM_ERROR_MESSAGE)
+        raise upstream_error()
     if len(times) != expected_days:
-        raise UpstreamError(UPSTREAM_ERROR_MESSAGE)
+        raise upstream_error()
     try:
         grid_lat = float(data["latitude"])
         grid_lon = float(data["longitude"])
         utc_offset = int(data["utc_offset_seconds"])
     except (KeyError, TypeError, ValueError):
-        raise UpstreamError(UPSTREAM_ERROR_MESSAGE) from None
+        raise upstream_error() from None
     elevation = data.get("elevation")
     if elevation is not None and not isinstance(elevation, (int, float)):
-        raise UpstreamError(UPSTREAM_ERROR_MESSAGE)
+        raise upstream_error()
     return {
         "grid_lat": grid_lat,
         "grid_lon": grid_lon,

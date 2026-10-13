@@ -1,37 +1,31 @@
 import datetime as dt
-import logging
 from typing import Any
 
 import pandas as pd
 
+from app.constants import HISTORY_START, MAX_CELLS
 from app.engine.cleaning import clean_daily, days_in_year
 from app.services import open_meteo, regions, storage
 
-HISTORY_START = 1990  # working.md locked ingest window (single code copy)
 SOURCE = "open-meteo-era5"
 UNIT = "C"
-
-_LOGGER = logging.getLogger(__name__)
-
-
-class IngestError(Exception):
-    pass
-
 
 def last_full_year() -> int:
     return dt.datetime.now(dt.UTC).year - 1
 
-
 def missing_years(db: Any, cell_id: str) -> list[int]:
-    window = range(HISTORY_START, last_full_year() + 1)
-    present = storage.existing_years(db, cell_id, HISTORY_START, last_full_year())
-    return sorted(set(window) - present)
+    missing, _skipped = _year_sets(db, cell_id)
+    return missing
 
+def _year_sets(db: Any, cell_id: str) -> tuple[list[int], list[int]]:
+    current = last_full_year()
+    present = storage.existing_years(db, cell_id, HISTORY_START, current)
+    missing = sorted(set(range(HISTORY_START, current + 1)) - present)
+    return missing, sorted(present)
 
 def ingest_cell(db: Any, cell_id: str) -> dict:
     regions.cell_center(cell_id)
-    missing = missing_years(db, cell_id)
-    skipped = sorted(storage.existing_years(db, cell_id, HISTORY_START, last_full_year()))
+    missing, skipped = _year_sets(db, cell_id)
     if not missing:
         return {
             "cell_id": cell_id,
@@ -43,13 +37,13 @@ def ingest_cell(db: Any, cell_id: str) -> dict:
     payload = open_meteo.fetch_daily_tmax(cell_id, first, last)
     dates, values = payload["dates"], payload["tmax"]
     if len(dates) != len(values):
-        raise IngestError("Fetched daily series is malformed.")
+        raise open_meteo.upstream_error()
     if dates[0] != f"{first}-01-01" or dates[-1] != f"{last}-12-31":
-        raise IngestError("Fetched response does not bound the full requested span.")
+        raise open_meteo.upstream_error()
     try:
         clean = clean_daily(dates, values)
-    except ValueError as exc:
-        raise IngestError(str(exc)) from None
+    except ValueError:
+        raise open_meteo.upstream_error() from None
     missing_mask = clean.attrs["missing_mask"]
     invalid_mask = clean.attrs["invalid_mask"]
     suspect_mask = clean.attrs["suspect_mask"]
@@ -58,9 +52,7 @@ def ingest_cell(db: Any, cell_id: str) -> dict:
         mask = clean.index.year == year
         length = int(mask.sum())
         if length != days_in_year(year):
-            raise IngestError(
-                f"Fetched data does not cover all {length} of {days_in_year(year)} days in {year}."
-            )
+            raise open_meteo.upstream_error()
         years.append(
             {
                 "year": year,
@@ -88,15 +80,14 @@ def ingest_cell(db: Any, cell_id: str) -> dict:
         )
     return {
         "cell_id": cell_id,
-        "fetched_years": [year for year in missing],
+        "fetched_years": list(missing),
         "skipped_years": skipped,
         "status": "ingested",
     }
 
-
 def ingest_region(db: Any, cell_ids: list[str]) -> list[dict]:
-    if len(cell_ids) > regions.MAX_CELLS:
-        raise ValueError(f"A region is limited to {regions.MAX_CELLS} grid cells.")
+    if len(cell_ids) > MAX_CELLS:
+        raise ValueError(f"A region is limited to {MAX_CELLS} grid cells.")
     results: list[dict] = []
     for cell_id in cell_ids:
         try:

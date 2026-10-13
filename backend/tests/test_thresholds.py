@@ -1,18 +1,22 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from app.engine.thresholds import (
-    ThresholdError,
     compute_thresholds,
     leap_aligned_doy,
 )
+from app.errors import AppError
+
 
 def _daily(start_year: int, end_year: int) -> pd.DatetimeIndex:
     return pd.date_range(f"{start_year}-01-01", f"{end_year}-12-31", freq="D")
 
+
 def _constant(start_year: int, end_year: int, value: float = 30.0) -> pd.Series:
     index = _daily(start_year, end_year)
     return pd.Series(np.full(len(index), value), index=index, dtype="float64")
+
 
 def _leap_year_index(start_year: int, end_year: int) -> pd.DatetimeIndex:
     parts = [
@@ -22,8 +26,12 @@ def _leap_year_index(start_year: int, end_year: int) -> pd.DatetimeIndex:
     ]
     return parts[0].append(parts[1:])
 
-def test_threshold_error_is_a_typed_value_error() -> None:
-    assert issubclass(ThresholdError, ValueError)
+
+def test_threshold_error_is_an_app_error_with_code() -> None:
+    with pytest.raises(AppError) as excinfo:
+        compute_thresholds(_constant(2001, 2020))
+    assert excinfo.value.code == "data_unavailable"
+
 
 @pytest.mark.parametrize(
     ("date", "expected"),
@@ -43,14 +51,17 @@ def test_leap_aligned_doy_single_dates(date: str, expected: int) -> None:
     assert result.dtype == np.dtype(int) or result.dtype.kind == "i"
     assert result.tolist() == [expected]
 
+
 def test_leap_aligned_doy_full_leap_year_is_1_to_366() -> None:
     result = leap_aligned_doy(_daily(2020, 2020))
     assert sorted(result.tolist()) == list(range(1, 367))
+
 
 def test_leap_aligned_doy_full_non_leap_year_skips_slot_60() -> None:
     result = leap_aligned_doy(_daily(2019, 2019))
     assert 60 not in result.tolist()
     assert sorted(result.tolist()) == list(range(1, 60)) + list(range(61, 367))
+
 
 def test_constant_series_gives_constant_thresholds() -> None:
     result = compute_thresholds(_constant(1991, 2020, 30.0))
@@ -58,6 +69,7 @@ def test_constant_series_gives_constant_thresholds() -> None:
     assert result.name == "threshold"
     assert list(result.index) == list(range(1, 367))
     assert np.allclose(result.to_numpy(), 30.0)
+
 
 def test_known_answer_percentile_and_circular_wrap() -> None:
     index = _daily(1991, 2014)
@@ -70,6 +82,7 @@ def test_known_answer_percentile_and_circular_wrap() -> None:
     assert result.loc[1] == 1000.0
     assert result.loc[366] == 1000.0
 
+
 def test_seasonal_sine_peaks_in_summer() -> None:
     index = _daily(1991, 2020)
     day_of_year = np.asarray(index.dayofyear)
@@ -81,12 +94,14 @@ def test_seasonal_sine_peaks_in_summer() -> None:
     assert 180 <= int(result.idxmax()) <= 215
     assert int(result.idxmin()) <= 40 or int(result.idxmin()) >= 340
 
+
 def test_injected_nans_lower_the_pool_without_producing_nan() -> None:
     series = _constant(1991, 2020, 30.0)
     series.iloc[50:60] = np.nan
     result = compute_thresholds(series)
     assert not result.isna().any()
     assert np.allclose(result.to_numpy(), 30.0)
+
 
 def test_all_nan_window_produces_nan_and_never_zero() -> None:
     index = _daily(1991, 2014)
@@ -98,9 +113,11 @@ def test_all_nan_window_produces_nan_and_never_zero() -> None:
     assert result.loc[117] != 0.0
     assert result.loc[200] == 30.0
 
+
 def test_insufficient_baseline_years_raise() -> None:
-    with pytest.raises(ThresholdError):
+    with pytest.raises(AppError):
         compute_thresholds(_constant(2000, 2009))
+
 
 def test_baseline_years_below_coverage_raise() -> None:
     index = _daily(1991, 2014)
@@ -108,8 +125,9 @@ def test_baseline_years_below_coverage_raise() -> None:
     for year in range(1991, 2015):
         positions = np.flatnonzero(np.asarray(index.year == year))
         values[positions[300:]] = np.nan
-    with pytest.raises(ThresholdError):
+    with pytest.raises(AppError):
         compute_thresholds(pd.Series(values, index=index))
+
 
 def test_data_outside_baseline_is_ignored() -> None:
     index = _daily(1990, 2025)
@@ -120,6 +138,7 @@ def test_data_outside_baseline_is_ignored() -> None:
     baseline = series[(series.index.year >= 1991) & (series.index.year <= 2020)]
     pd.testing.assert_series_equal(full, compute_thresholds(baseline))
 
+
 def test_input_not_mutated_and_calls_deterministic() -> None:
     series = _constant(1991, 2020, 30.0)
     before = series.to_numpy().copy()
@@ -128,19 +147,23 @@ def test_input_not_mutated_and_calls_deterministic() -> None:
     assert np.array_equal(series.to_numpy(), before, equal_nan=True)
     pd.testing.assert_series_equal(first, second)
 
+
 def test_non_datetime_index_rejected() -> None:
-    with pytest.raises(ThresholdError):
+    with pytest.raises(AppError):
         compute_thresholds(pd.Series([30.0, 30.0, 30.0]))
+
 
 def test_unsorted_index_rejected() -> None:
     index = pd.DatetimeIndex(["2020-01-02", "2020-01-01", "2020-01-03"])
-    with pytest.raises(ThresholdError):
+    with pytest.raises(AppError):
         compute_thresholds(pd.Series([30.0, 30.0, 30.0], index=index))
+
 
 def test_duplicate_index_rejected() -> None:
     index = pd.DatetimeIndex(["2020-01-01", "2020-01-01"])
-    with pytest.raises(ThresholdError):
+    with pytest.raises(AppError):
         compute_thresholds(pd.Series([30.0, 30.0], index=index))
+
 
 def test_all_nan_year_inside_baseline_is_ignored() -> None:
     series = _constant(1991, 2020, 30.0)
@@ -149,12 +172,14 @@ def test_all_nan_year_inside_baseline_is_ignored() -> None:
     assert not result.isna().any()
     assert np.allclose(result.to_numpy(), 30.0)
 
+
 def test_series_starting_mid_baseline_raises() -> None:
-    with pytest.raises(ThresholdError):
+    with pytest.raises(AppError):
         compute_thresholds(_constant(2000, 2020))
+
 
 def test_only_leap_years_present_raises() -> None:
     index = _leap_year_index(1991, 2020)
     series = pd.Series(np.full(len(index), 30.0), index=index, dtype="float64")
-    with pytest.raises(ThresholdError):
+    with pytest.raises(AppError):
         compute_thresholds(series)

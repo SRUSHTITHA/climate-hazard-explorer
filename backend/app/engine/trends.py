@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pymannkendall as mk
 from scipy.stats import theilslopes
+from app.errors import AppError
 
 MIN_VALID_YEARS = 15
 P_STRONG = 0.05
@@ -12,14 +13,9 @@ PERIOD_YEARS = 5
 PCT_BASE_MIN = 1.0
 
 
-class TrendError(ValueError):
-    pass
-
-
 def rolling_mean(series: pd.Series) -> pd.Series:
     _validate_series(series)
     return series.rolling(ROLLING_WINDOW, center=True, min_periods=ROLLING_MIN_PERIODS).mean()
-
 
 def trend(series: pd.Series) -> dict:
     _validate_series(series)
@@ -47,13 +43,9 @@ def trend(series: pd.Series) -> dict:
     result["pct_change"] = _pct_change(result["first_mean"], result["last_mean"])
     return result
 
-
 def trend_table(df: pd.DataFrame, columns: tuple[str, ...]) -> dict[str, dict]:
-    if "valid" not in df.columns:
-        raise TrendError("df must have a valid column.")
-    missing = [column for column in columns if column not in df.columns]
-    if missing:
-        raise TrendError(f"df is missing column(s): {', '.join(missing)}.")
+    if "valid" not in df.columns or any(column not in df.columns for column in columns):
+        raise AppError.internal()
     valid_rows = df[df["valid"].astype(bool)]
     return {column: trend(valid_rows[column]) for column in columns}
 
@@ -84,13 +76,12 @@ def _pct_change(first_mean: float, last_mean: float) -> float | None:
 
 def _validate_series(series: pd.Series) -> None:
     if not isinstance(series, pd.Series) or not pd.api.types.is_numeric_dtype(series.dtype):
-        raise TrendError("series must be a numeric pandas Series.")
+        raise AppError.internal()
     index = series.index
-    if not pd.api.types.is_integer_dtype(index.dtype):
-        raise TrendError("series index must be integer years.")
-    if index.has_duplicates:
-        raise TrendError("series index must not contain duplicate years.")
-    if not index.is_monotonic_increasing:
-        raise TrendError("series index must be sorted.")
-    if np.isinf(series.to_numpy(dtype=float)).any():
-        raise TrendError("series must not contain infinite values.")
+    if (
+        not pd.api.types.is_integer_dtype(index.dtype)
+        or index.has_duplicates
+        or not index.is_monotonic_increasing
+        or np.isinf(series.to_numpy(dtype=float)).any()
+    ):
+        raise AppError.internal()

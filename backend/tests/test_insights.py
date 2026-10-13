@@ -5,10 +5,11 @@ import pandas as pd
 import pytest
 
 from app.engine.events import detect_events
-from app.engine.insights import DATA_SOURCE, InsightError, build_insights
+from app.engine.insights import DATA_SOURCE, build_insights
 from app.engine.metrics import annual_metrics, region_metrics
 from app.engine.thresholds import compute_thresholds
 from app.engine.trends import MIN_VALID_YEARS, trend_table
+from app.errors import AppError
 
 
 def _region(**overrides) -> pd.DataFrame:
@@ -207,26 +208,27 @@ def test_fixed_order_keys_equality_and_no_mutation() -> None:
     assert trends == trends_before
 
 
-def test_bad_inputs_raise_insight_error() -> None:
+def test_bad_inputs_raise_app_error() -> None:
     region = _region()
-    with pytest.raises(InsightError):
+    with pytest.raises(AppError) as excinfo:
         build_insights("Heatwave", "Delhi", region, {"event_count": _trend()})
-    with pytest.raises(InsightError):
+    assert excinfo.value.code == "internal_error"
+    with pytest.raises(AppError):
         build_insights("Heatwave", "Delhi", region, {"heatwave_days": {"evidence": "strong"}})
-    with pytest.raises(InsightError):
+    with pytest.raises(AppError):
         broken = region.drop(columns="valid")
         build_insights("Heatwave", "Delhi", broken, {"heatwave_days": _trend()})
-    with pytest.raises(InsightError):
+    with pytest.raises(AppError):
         build_insights("Heatwave", "Delhi", region, {"heatwave_days": "not a dict"})
 
 
-def test_unknown_evidence_raises_insight_error() -> None:
-    with pytest.raises(InsightError):
+def test_unknown_evidence_raises_app_error() -> None:
+    with pytest.raises(AppError):
         _build({"heatwave_days": _trend(evidence="probable")})
 
 
 def test_nan_in_used_trend_field_raises_but_unused_nan_is_fine() -> None:
-    with pytest.raises(InsightError):
+    with pytest.raises(AppError):
         _build({"heatwave_days": _trend(slope=np.nan)})
     assert _build({"heatwave_days": _unusable()})[0]["level"] == "caution"
     nan_percent = _build({"heatwave_days": _trend(pct=np.nan)})[0]

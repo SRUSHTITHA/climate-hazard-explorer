@@ -6,8 +6,8 @@ from typing import Any
 import httpx
 import pytest
 
-from app.services.open_meteo import ARCHIVE_URL, UpstreamError, fetch_daily_tmax
-from app.services.regions import RegionError
+from app.errors import AppError
+from app.services.open_meteo import ARCHIVE_URL, fetch_daily_tmax
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -89,7 +89,7 @@ def test_gives_up_after_three_500s(sleeps: list[float]) -> None:
         return httpx.Response(500, json={"error": True})
 
     client = _client(handler)
-    with pytest.raises(UpstreamError):
+    with pytest.raises(AppError):
         fetch_daily_tmax("28.50_77.25", 2024, 2024, client=client)
     assert calls == 3
     assert sleeps == [1.0, 2.0]
@@ -126,8 +126,9 @@ def test_400_raises_immediately_and_logs_reason_server_side(
 
     with caplog.at_level(logging.WARNING):
         client = _client(handler)
-        with pytest.raises(UpstreamError) as excinfo:
+        with pytest.raises(AppError) as excinfo:
             fetch_daily_tmax("28.50_77.25", 2024, 2024, client=client)
+    assert excinfo.value.code == "upstream_error"
     assert calls == 1
     assert "tempeture_2m_max" not in str(excinfo.value)
     assert "bad variable" not in str(excinfo.value)
@@ -173,8 +174,9 @@ def test_validation_failures_raise_upstream_error(sabotage: str) -> None:
         payload["daily_units"]["temperature_2m_max"] = "K"
         response = httpx.Response(200, json=payload)
     client = _client(lambda _: response)
-    with pytest.raises(UpstreamError):
+    with pytest.raises(AppError) as excinfo:
         fetch_daily_tmax("28.50_77.25", 2024, 2024, client=client)
+    assert excinfo.value.code == "upstream_error"
 
 
 @pytest.mark.parametrize(
@@ -228,5 +230,6 @@ def test_injected_client_stays_open() -> None:
 @pytest.mark.parametrize("cell_id", ["abc", "28.50", "999.00_0.00", "28.50_77.25_1", "x_y"])
 def test_invalid_cell_ids_fail_in_regions_before_network(cell_id: str) -> None:
     client = _client(_fail_if_called)
-    with pytest.raises(RegionError):
+    with pytest.raises(AppError) as excinfo:
         fetch_daily_tmax(cell_id, 2024, 2024, client=client)
+    assert excinfo.value.code == "invalid_region"
