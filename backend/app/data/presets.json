@@ -1,0 +1,682 @@
+[
+  {
+    "id": "mumbai",
+    "name": "Mumbai",
+    "kind": "city",
+    "country": "India",
+    "lat": 19.07283,
+    "lon": 72.88261
+  },
+  {
+    "id": "new-delhi",
+    "name": "New Delhi",
+    "kind": "city",
+    "country": "India",
+    "lat": 28.62137,
+    "lon": 77.2148
+  },
+  {
+    "id": "bengaluru",
+    "name": "Bengaluru",
+    "kind": "city",
+    "country": "India",
+    "lat": 12.97194,
+    "lon": 77.59369
+  },
+  {
+    "id": "hyderabad",
+    "name": "Hyderabad",
+    "kind": "city",
+    "country": "India",
+    "lat": 17.38405,
+    "lon": 78.45636
+  },
+  {
+    "id": "ahmedabad",
+    "name": "Ahmedabad",
+    "kind": "city",
+    "country": "India",
+    "lat": 23.02579,
+    "lon": 72.58727
+  },
+  {
+    "id": "chennai",
+    "name": "Chennai",
+    "kind": "city",
+    "country": "India",
+    "lat": 13.08784,
+    "lon": 80.27847
+  },
+  {
+    "id": "kolkata",
+    "name": "Kolkata",
+    "kind": "city",
+    "country": "India",
+    "lat": 22.56263,
+    "lon": 88.36304
+  },
+  {
+    "id": "pune",
+    "name": "Pune",
+    "kind": "city",
+    "country": "India",
+    "lat": 18.51957,
+    "lon": 73.85535
+  },
+  {
+    "id": "surat",
+    "name": "Surat",
+    "kind": "city",
+    "country": "India",
+    "lat": 21.19594,
+    "lon": 72.83023
+  },
+  {
+    "id": "jaipur",
+    "name": "Jaipur",
+    "kind": "city",
+    "country": "India",
+    "lat": 26.91962,
+    "lon": 75.78781
+  },
+  {
+    "id": "lucknow",
+    "name": "Lucknow",
+    "kind": "city",
+    "country": "India",
+    "lat": 26.83928,
+    "lon": 80.92313
+  },
+  {
+    "id": "kanpur",
+    "name": "Kanpur",
+    "kind": "city",
+    "country": "India",
+    "lat": 26.46523,
+    "lon": 80.34975
+  },
+  {
+    "id": "nagpur",
+    "name": "Nagpur",
+    "kind": "city",
+    "country": "India",
+    "lat": 21.14631,
+    "lon": 79.08491
+  },
+  {
+    "id": "indore",
+    "name": "Indore",
+    "kind": "city",
+    "country": "India",
+    "lat": 22.71792,
+    "lon": 75.8333
+  },
+  {
+    "id": "thane",
+    "name": "Thane",
+    "kind": "city",
+    "country": "India",
+    "lat": 19.19704,
+    "lon": 72.96355
+  },
+  {
+    "id": "bhopal",
+    "name": "Bhopal",
+    "kind": "city",
+    "country": "India",
+    "lat": 23.25469,
+    "lon": 77.40289
+  },
+  {
+    "id": "visakhapatnam",
+    "name": "Visakhapatnam",
+    "kind": "city",
+    "country": "India",
+    "lat": 17.68009,
+    "lon": 83.20161
+  },
+  {
+    "id": "patna",
+    "name": "Patna",
+    "kind": "city",
+    "country": "India",
+    "lat": 25.59408,
+    "lon": 85.13563
+  },
+  {
+    "id": "vadodara",
+    "name": "Vadodara",
+    "kind": "city",
+    "country": "India",
+    "lat": 22.29941,
+    "lon": 73.20812
+  },
+  {
+    "id": "ludhiana",
+    "name": "Ludhiana",
+    "kind": "city",
+    "country": "India",
+    "lat": 30.91204,
+    "lon": 75.85379
+  },
+  {
+    "id": "agra",
+    "name": "Agra",
+    "kind": "city",
+    "country": "India",
+    "lat": 27.18333,
+    "lon": 78.01667
+  },
+  {
+    "id": "nashik",
+    "name": "Nashik",
+    "kind": "city",
+    "country": "India",
+    "lat": 19.99727,
+    "lon": 73.79096
+  },
+  {
+    "id": "varanasi",
+    "name": "Varanasi",
+    "kind": "city",
+    "country": "India",
+    "lat": 25.31668,
+    "lon": 83.01041
+  },
+  {
+    "id": "amritsar",
+    "name": "Amritsar",
+    "kind": "city",
+    "country": "India",
+    "lat": 31.62234,
+    "lon": 74.87534
+  },
+  {
+    "id": "prayagraj",
+    "name": "Prayagraj",
+    "kind": "city",
+    "country": "India",
+    "lat": 25.44478,
+    "lon": 81.84322
+  },
+  {
+    "id": "ranchi",
+    "name": "Ranchi",
+    "kind": "city",
+    "country": "India",
+    "lat": 23.34316,
+    "lon": 85.3094
+  },
+  {
+    "id": "coimbatore",
+    "name": "Coimbatore",
+    "kind": "city",
+    "country": "India",
+    "lat": 11.00555,
+    "lon": 76.96612
+  },
+  {
+    "id": "kochi",
+    "name": "Kochi",
+    "kind": "city",
+    "country": "India",
+    "lat": 9.93988,
+    "lon": 76.26022
+  },
+  {
+    "id": "guwahati",
+    "name": "Guwahati",
+    "kind": "city",
+    "country": "India",
+    "lat": 26.1844,
+    "lon": 91.7458
+  },
+  {
+    "id": "jodhpur",
+    "name": "Jodhpur",
+    "kind": "city",
+    "country": "India",
+    "lat": 26.26841,
+    "lon": 73.00594
+  },
+  {
+    "id": "london",
+    "name": "London",
+    "kind": "global",
+    "country": "United Kingdom",
+    "lat": 51.50853,
+    "lon": -0.12574
+  },
+  {
+    "id": "new-york",
+    "name": "New York",
+    "kind": "global",
+    "country": "United States",
+    "lat": 40.71427,
+    "lon": -74.00597
+  },
+  {
+    "id": "tokyo",
+    "name": "Tokyo",
+    "kind": "global",
+    "country": "Japan",
+    "lat": 35.6895,
+    "lon": 139.69171
+  },
+  {
+    "id": "paris",
+    "name": "Paris",
+    "kind": "global",
+    "country": "France",
+    "lat": 48.85341,
+    "lon": 2.3488
+  },
+  {
+    "id": "sydney",
+    "name": "Sydney",
+    "kind": "global",
+    "country": "Australia",
+    "lat": -33.86785,
+    "lon": 151.20732
+  },
+  {
+    "id": "dubai",
+    "name": "Dubai",
+    "kind": "global",
+    "country": "United Arab Emirates",
+    "lat": 25.07725,
+    "lon": 55.30927
+  },
+  {
+    "id": "singapore",
+    "name": "Singapore",
+    "kind": "global",
+    "country": "Singapore",
+    "lat": 1.28967,
+    "lon": 103.85007
+  },
+  {
+    "id": "los-angeles",
+    "name": "Los Angeles",
+    "kind": "global",
+    "country": "United States",
+    "lat": 34.05223,
+    "lon": -118.24368
+  },
+  {
+    "id": "berlin",
+    "name": "Berlin",
+    "kind": "global",
+    "country": "Germany",
+    "lat": 52.52437,
+    "lon": 13.41053
+  },
+  {
+    "id": "toronto",
+    "name": "Toronto",
+    "kind": "global",
+    "country": "Canada",
+    "lat": 43.70643,
+    "lon": -79.39864
+  },
+  {
+    "id": "andhra-pradesh",
+    "name": "Andhra Pradesh",
+    "kind": "state",
+    "country": "India",
+    "south": 16.25,
+    "west": 80.25,
+    "north": 16.75,
+    "east": 80.75
+  },
+  {
+    "id": "arunachal-pradesh",
+    "name": "Arunachal Pradesh",
+    "kind": "state",
+    "country": "India",
+    "south": 26.75,
+    "west": 93.25,
+    "north": 27.25,
+    "east": 93.75
+  },
+  {
+    "id": "assam",
+    "name": "Assam",
+    "kind": "state",
+    "country": "India",
+    "south": 26.0,
+    "west": 91.5,
+    "north": 26.5,
+    "east": 92.0
+  },
+  {
+    "id": "bihar",
+    "name": "Bihar",
+    "kind": "state",
+    "country": "India",
+    "south": 25.25,
+    "west": 85.0,
+    "north": 25.75,
+    "east": 85.5
+  },
+  {
+    "id": "chhattisgarh",
+    "name": "Chhattisgarh",
+    "kind": "state",
+    "country": "India",
+    "south": 21.0,
+    "west": 81.5,
+    "north": 21.5,
+    "east": 82.0
+  },
+  {
+    "id": "goa",
+    "name": "Goa",
+    "kind": "state",
+    "country": "India",
+    "south": 22.75,
+    "west": 73.0,
+    "north": 23.25,
+    "east": 73.5
+  },
+  {
+    "id": "gujarat",
+    "name": "Gujarat",
+    "kind": "state",
+    "country": "India",
+    "south": 23.0,
+    "west": 72.5,
+    "north": 23.5,
+    "east": 73.0
+  },
+  {
+    "id": "haryana",
+    "name": "Haryana",
+    "kind": "state",
+    "country": "India",
+    "south": 28.75,
+    "west": 76.25,
+    "north": 29.25,
+    "east": 76.75
+  },
+  {
+    "id": "himachal-pradesh",
+    "name": "Himachal Pradesh",
+    "kind": "state",
+    "country": "India",
+    "south": 30.75,
+    "west": 77.0,
+    "north": 31.25,
+    "east": 77.5
+  },
+  {
+    "id": "jharkhand",
+    "name": "Jharkhand",
+    "kind": "state",
+    "country": "India",
+    "south": 23.0,
+    "west": 85.0,
+    "north": 23.5,
+    "east": 85.5
+  },
+  {
+    "id": "karnataka",
+    "name": "Karnataka",
+    "kind": "state",
+    "country": "India",
+    "south": 12.75,
+    "west": 77.25,
+    "north": 13.25,
+    "east": 77.75
+  },
+  {
+    "id": "kerala",
+    "name": "Kerala",
+    "kind": "state",
+    "country": "India",
+    "south": 8.25,
+    "west": 76.75,
+    "north": 8.75,
+    "east": 77.25
+  },
+  {
+    "id": "madhya-pradesh",
+    "name": "Madhya Pradesh",
+    "kind": "state",
+    "country": "India",
+    "south": 23.0,
+    "west": 77.25,
+    "north": 23.5,
+    "east": 77.75
+  },
+  {
+    "id": "maharashtra",
+    "name": "Maharashtra",
+    "kind": "state",
+    "country": "India",
+    "south": 18.75,
+    "west": 72.75,
+    "north": 19.25,
+    "east": 73.25
+  },
+  {
+    "id": "manipur",
+    "name": "Manipur",
+    "kind": "state",
+    "country": "India",
+    "south": 24.5,
+    "west": 93.75,
+    "north": 25.0,
+    "east": 94.25
+  },
+  {
+    "id": "meghalaya",
+    "name": "Meghalaya",
+    "kind": "state",
+    "country": "India",
+    "south": 25.25,
+    "west": 91.75,
+    "north": 25.75,
+    "east": 92.25
+  },
+  {
+    "id": "mizoram",
+    "name": "Mizoram",
+    "kind": "state",
+    "country": "India",
+    "south": 23.5,
+    "west": 92.5,
+    "north": 24.0,
+    "east": 93.0
+  },
+  {
+    "id": "nagaland",
+    "name": "Nagaland",
+    "kind": "state",
+    "country": "India",
+    "south": 25.5,
+    "west": 93.75,
+    "north": 26.0,
+    "east": 94.25
+  },
+  {
+    "id": "odisha",
+    "name": "Odisha",
+    "kind": "state",
+    "country": "India",
+    "south": 20.0,
+    "west": 85.5,
+    "north": 20.5,
+    "east": 86.0
+  },
+  {
+    "id": "punjab",
+    "name": "Punjab",
+    "kind": "state",
+    "country": "India",
+    "south": 30.75,
+    "west": 75.5,
+    "north": 31.25,
+    "east": 76.0
+  },
+  {
+    "id": "rajasthan",
+    "name": "Rajasthan",
+    "kind": "state",
+    "country": "India",
+    "south": 26.75,
+    "west": 75.5,
+    "north": 27.25,
+    "east": 76.0
+  },
+  {
+    "id": "sikkim",
+    "name": "Sikkim",
+    "kind": "state",
+    "country": "India",
+    "south": 27.0,
+    "west": 88.25,
+    "north": 27.5,
+    "east": 88.75
+  },
+  {
+    "id": "tamil-nadu",
+    "name": "Tamil Nadu",
+    "kind": "state",
+    "country": "India",
+    "south": 12.75,
+    "west": 80.0,
+    "north": 13.25,
+    "east": 80.5
+  },
+  {
+    "id": "telangana",
+    "name": "Telangana",
+    "kind": "state",
+    "country": "India",
+    "south": 17.25,
+    "west": 78.25,
+    "north": 17.75,
+    "east": 78.75
+  },
+  {
+    "id": "tripura",
+    "name": "Tripura",
+    "kind": "state",
+    "country": "India",
+    "south": 23.5,
+    "west": 91.0,
+    "north": 24.0,
+    "east": 91.5
+  },
+  {
+    "id": "uttar-pradesh",
+    "name": "Uttar Pradesh",
+    "kind": "state",
+    "country": "India",
+    "south": 26.5,
+    "west": 80.75,
+    "north": 27.0,
+    "east": 81.25
+  },
+  {
+    "id": "uttarakhand",
+    "name": "Uttarakhand",
+    "kind": "state",
+    "country": "India",
+    "south": 30.0,
+    "west": 77.75,
+    "north": 30.5,
+    "east": 78.25
+  },
+  {
+    "id": "west-bengal",
+    "name": "West Bengal",
+    "kind": "state",
+    "country": "India",
+    "south": 22.25,
+    "west": 88.0,
+    "north": 22.75,
+    "east": 88.5
+  },
+  {
+    "id": "andaman-and-nicobar-islands",
+    "name": "Andaman and Nicobar Islands",
+    "kind": "state",
+    "country": "India",
+    "south": 11.5,
+    "west": 92.5,
+    "north": 12.0,
+    "east": 93.0
+  },
+  {
+    "id": "chandigarh",
+    "name": "Chandigarh",
+    "kind": "state",
+    "country": "India",
+    "south": 30.5,
+    "west": 76.5,
+    "north": 31.0,
+    "east": 77.0
+  },
+  {
+    "id": "dadra-and-nagar-haveli-and-daman-and-diu",
+    "name": "Dadra and Nagar Haveli and Daman and Diu",
+    "kind": "state",
+    "country": "India",
+    "south": 20.25,
+    "west": 72.5,
+    "north": 20.75,
+    "east": 73.0
+  },
+  {
+    "id": "delhi",
+    "name": "Delhi",
+    "kind": "state",
+    "country": "India",
+    "south": 28.25,
+    "west": 77.0,
+    "north": 28.75,
+    "east": 77.5
+  },
+  {
+    "id": "jammu-and-kashmir",
+    "name": "Jammu and Kashmir",
+    "kind": "state",
+    "country": "India",
+    "south": 33.75,
+    "west": 74.5,
+    "north": 34.25,
+    "east": 75.0
+  },
+  {
+    "id": "ladakh",
+    "name": "Ladakh",
+    "kind": "state",
+    "country": "India",
+    "south": 34.0,
+    "west": 77.25,
+    "north": 34.5,
+    "east": 77.75
+  },
+  {
+    "id": "lakshadweep",
+    "name": "Lakshadweep",
+    "kind": "state",
+    "country": "India",
+    "south": 10.25,
+    "west": 72.5,
+    "north": 10.75,
+    "east": 73.0
+  },
+  {
+    "id": "puducherry",
+    "name": "Puducherry",
+    "kind": "state",
+    "country": "India",
+    "south": 11.75,
+    "west": 79.5,
+    "north": 12.25,
+    "east": 80.0
+  }
+]
