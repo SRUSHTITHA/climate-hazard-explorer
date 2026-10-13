@@ -30,7 +30,10 @@ async function readError(response) {
 
 async function getJson(path, params, signal) {
   const query = buildQuery(params);
-  const url = `${BASE_URL}${path}${query ? `?${query}` : ''}`;
+  const baseUrl = BASE_URL.replace(/\/+$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const url = `${baseUrl}${normalizedPath}${query ? `?${query}` : ''}`;
+
   const response = await fetch(url, { signal });
   if (!response.ok) {
     throw await readError(response);

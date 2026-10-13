@@ -13,7 +13,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE)
     mongodb_uri: str
     mongodb_db_name: str = "climate_hazard"
-    cors_allowed_origins: str = "http://localhost:5173"
+    cors_allowed_origins: str = (
+    "http://localhost:5173,"
+    "https://climate-hazard-explorer-6pjf9whk0-sru7.vercel.app" )
     rate_limit_default: str = _RATE_LIMIT_DEFAULTS["rate_limit_default"]
     rate_limit_compute: str = _RATE_LIMIT_DEFAULTS["rate_limit_compute"]
     trusted_proxy_hops: int = 0
