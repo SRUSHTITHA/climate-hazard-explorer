@@ -7,6 +7,7 @@ import TrendChart from './components/TrendChart.jsx';
 import YearControls from './components/YearControls.jsx';
 import { readParams, writeParams } from './urlState.js';
 import { useAnalysis } from './useAnalysis.js';
+import { exportCsv, exportPdf } from './export.js';
 
 function SummaryCards({ data }) {
   const validSeries = data.series.filter((point) => point.valid && point.heatwave_days != null);
@@ -49,10 +50,11 @@ function SummaryCards({ data }) {
   );
 }
 
-function AnalysisView({ data }) {
+function AnalysisView({ data, selection }) {
   if (data.series.length === 0) return <div className="empty-state"><h2>No data available</h2><p>Try a different region or time range.</p></div>;
   return (
     <>
+      <div className="export-toolbar no-print"><div><p className="eyebrow">YOUR RESULTS</p><p className="export-hint">Export the selected analysis for reporting or further work.</p></div><div className="export-actions"><button type="button" className="button-secondary" onClick={() => exportCsv(data, selection)}>Export CSV</button><button type="button" onClick={exportPdf}>Export PDF / Print</button></div></div>
       <SummaryCards data={data} />
       <div className="analysis-grid">
         <InsightCard insights={data.insights} />
@@ -74,13 +76,13 @@ function applySelection(patch, setSelection) {
   setSelection(readParams());
 }
 
-function getStatus(regions, params, analysis) {
+function getStatus(regions, params, analysis, selection) {
   if (regions.isPending) return <div className="status-card"><span className="loading-dot" />Loading available regions…</div>;
   if (regions.isError) return <p className="error status-card" role="alert">{regions.error.message}</p>;
   if (!params) return <div className="status-card">Choose a region and apply your analysis settings to get started.</div>;
   if (analysis.isPending) return <div className="status-card"><span className="loading-dot" />Loading climate analysis… This may take a few minutes for a new region.</div>;
   if (analysis.isError) return <p className="error status-card" role="alert">{analysis.error.message}</p>;
-  return <AnalysisView data={analysis.data} />;
+  return <AnalysisView data={analysis.data} selection={selection} />;
 }
 
 function AppShell({ selection, regions, analysis, params, onApply }) {
@@ -109,7 +111,7 @@ function AppShell({ selection, regions, analysis, params, onApply }) {
       </section>
 
       <section className="analysis-status" aria-live="polite">
-        {getStatus(regions, params, analysis)}
+        {getStatus(regions, params, analysis, selection)}
       </section>
       <footer className="app-footer"><span>Climate Hazard Explorer</span><span>Evidence-led insights · Data limitations shown transparently</span></footer>
     </main>

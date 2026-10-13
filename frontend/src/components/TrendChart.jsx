@@ -4,6 +4,7 @@ import {
 import { useState } from 'react';
 import { Chart as ChartCanvas } from 'react-chartjs-2';
 import MetricSelect, { METRICS, initialMetric } from './MetricSelect.jsx';
+import { mannKendall } from '../trendStats.js';
 
 Chart.register(BarController, BarElement, CategoryScale, Legend, LinearScale,
   LineController, LineElement, PointElement, Tooltip);
@@ -57,6 +58,7 @@ export default function TrendChart({ series, trend: trends }) {
   const years = series.map((point) => point.year);
   const excluded = series.filter((point) => !point.valid).length;
   const text = trendText(trends[metric]);
+  const statisticalTrend = mannKendall(series, metric);
   return (
     <section className="trend" aria-label="Trend chart">
       <MetricSelect metric={metric} onChange={setMetric} />
@@ -66,6 +68,7 @@ export default function TrendChart({ series, trend: trends }) {
         options={chartOptions(metric)}
         aria-label={`${METRICS[metric][0]} by year from ${years[0]} to ${years[years.length - 1]}`} />
       {text ? <p className="trend-text">{text}</p> : null}
+      <div className="stat-test"><div><strong>Mann–Kendall trend test</strong><p className="subtitle">Non-parametric monotonic trend test · α = 0.05</p></div>{statisticalTrend.insufficient ? <p className="subtitle">Not enough valid annual values (at least 8 required; found {statisticalTrend.n}).</p> : <><div className="stat-test-grid"><span><small>Direction</small><strong>{statisticalTrend.direction}</strong></span><span><small>p-value</small><strong>{statisticalTrend.p.toFixed(4)}</strong></span><span><small>Kendall τ</small><strong>{statisticalTrend.tau.toFixed(3)}</strong></span><span><small>Sen slope</small><strong>{statisticalTrend.senSlope >= 0 ? '+' : ''}{statisticalTrend.senSlope.toFixed(2)} / decade</strong></span></div><p className="subtitle">{statisticalTrend.significant ? `Statistically significant monotonic trend (p < 0.05): ${statisticalTrend.direction}.` : 'No statistically significant monotonic trend detected at the 0.05 level.'} This client-side estimate uses valid annual values and is not a causal attribution.</p></>}</div>
     </section>
   );
 }

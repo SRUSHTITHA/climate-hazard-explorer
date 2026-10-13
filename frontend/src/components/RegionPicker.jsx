@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import RegionMapPicker from './RegionMapPicker.jsx';
 
 const BOX_KEYS = ['south', 'west', 'north', 'east'];
 const FIELDS = {
@@ -31,6 +32,7 @@ export default function RegionPicker({ regions, selection, loading, onApply }) {
   const [mode, setMode] = useState(() => initialMode(selection.region));
   const [draft, setDraft] = useState(() => initialDraft(selection.region));
   const [error, setError] = useState(null);
+  const [mapOpen, setMapOpen] = useState(false);
   const change = (key) => (event) => setDraft((prev) => ({ ...prev, [key]: event.target.value }));
 
   function submit(event) {
@@ -73,9 +75,11 @@ export default function RegionPicker({ regions, selection, loading, onApply }) {
                   onChange={change(key)} aria-describedby={error ? 'region-error' : undefined}
                   aria-invalid={Boolean(error)} /></label>)}
             </div>
-            <button type="submit">Apply</button>
+            <button type="submit">Apply coordinates</button>
             {error ? <p id="region-error" className="error" role="alert">{error}</p> : null}
           </form>}
+      <div className="map-launcher"><button type="button" className="button-secondary" onClick={() => { if (mode === 'preset') setMode('point'); setMapOpen((open) => !open); }}>{mapOpen ? 'Hide map' : 'Choose region on map'}</button><span className="subtitle">Click to open the interactive map.</span></div>
+      {mapOpen ? <RegionMapPicker mode={mode === 'preset' ? 'point' : mode} onClose={() => setMapOpen(false)} onApply={(region) => { const nextMode = ('lat' in region) ? 'point' : 'box'; setMode(nextMode); setDraft((prev) => ({ ...prev, ...region })); onApply({ region }); setError(null); }} /> : null}
       <p className="subtitle">{mode === 'box' ? `${STATE_NOTE} ${BOX_NOTE}` : STATE_NOTE}</p>
       {loading ? <p className="subtitle" aria-live="polite">{COLD_NOTE}</p> : null}
     </section>
