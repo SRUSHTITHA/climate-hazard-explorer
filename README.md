@@ -1,79 +1,128 @@
 # Climate Hazard Explorer
 
-A React + FastAPI application for historical heatwave analysis using Open-Meteo ERA5 daily maximum temperatures and MongoDB-backed caching.
+Live Demo: [View Climate Hazard Explorer](https://climate-hazard-explorer-2mt04x0dx-sru7.vercel.app/)
+
+Climate Hazard Explorer is a full-stack web application for analyzing historical heatwave patterns across geographic regions. It uses React for interactive visualizations, FastAPI for data processing and API endpoints, and MongoDB for caching analysis results.
 
 ## Features
 
-- Preset regions and validated custom point / latitude-longitude box inputs.
-- Heatwave detection based on a regional grid-cell percentile threshold and consecutive-day rule.
-- Annual frequency, duration and intensity metrics, rolling averages, trend summaries, and event history.
-- Data-quality indicators and API validation/error handling.
-- Annual time-series CSV export and browser Print / Save as PDF.
-- URL-persisted analysis selection.
+- Geographic selection: Choose preset regions or define custom points and latitude–longitude bounding boxes.
+- Historical analysis: Analyze heatwaves over a selected time period using daily maximum temperature data from Open-Meteo ERA5.
+- Heatwave detection: Identify events using a percentile-based temperature threshold and a consecutive-day rule.
+- Climate metrics: Explore annual frequency, duration, intensity, rolling averages, and historical event records.
+- Trend analysis: View long-term trends and summary insights with appropriate uncertainty considerations.
+- Data quality: Handle missing or invalid observations and report data availability.
+- Export: Download annual metrics as CSV or print and save reports as PDF.
 
-## Requirements
+## Technology Stack
 
-- Node.js compatible with the Vite version in `frontend/package.json`
-- Python version compatible with `backend/requirements.txt`
-- MongoDB instance
+- Frontend: React, Vite, JavaScript
+- Backend: Python, FastAPI
+- Database: MongoDB
+- Climate data: Open-Meteo ERA5
+- Deployment: Vercel (frontend), Render (backend)
 
-## Run locally
+## How It Works
 
-### Backend
+1. Select a geographic region and analysis period.
+2. Retrieve historical daily maximum temperature data.
+3. Validate and process observations, accounting for missing data.
+4. Apply the heatwave detection criteria and calculate annual metrics.
+5. Cache results in MongoDB and return analysis data through the API.
+6. Display interactive visualizations and summary insights in the frontend.
+
+## Heatwave Methodology
+
+A heatwave is identified using a percentile-based temperature threshold and a minimum consecutive-day requirement. The analysis calculates event frequency, duration, intensity, and annual trends.
+
+Results depend on the selected region, historical baseline, data availability, and detection parameters. Heatwave indicators describe meteorological conditions and should not be interpreted directly as measurements of human health impacts.
+
+## Run Locally
+
+### Prerequisites
+
+- Node.js and npm
+- Python compatible with `backend/requirements.txt`
+- A MongoDB instance
+
+### 1. Start the Backend
 
 ```bash
 cd backend
 python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux: source .venv/bin/activate
+```
+
+Activate the virtual environment, then install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-Copy `backend/.env.example` to `backend/.env` and set the MongoDB connection details. Then run:
+Create `backend/.env` using `backend/.env.example` and configure your MongoDB connection.
+
+Start the API:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-The API's health endpoint can be used to check service readiness.
+The API documentation is available at `http://localhost:8000/docs`.
 
-### Frontend
+### 2. Start the Frontend
 
-In another terminal:
+In a separate terminal:
 
 ```bash
 cd frontend
 npm install
 ```
 
-Copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_URL` to the backend base URL, then run:
+Create `frontend/.env` using `frontend/.env.example` and set the backend URL:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+Start the development server:
 
 ```bash
 npm run dev
 ```
 
-For a production bundle, run `npm run build`.
+### 3. Build for Production
 
-## Export behavior
+```bash
+npm run build
+```
 
-- **CSV** exports annual series values returned by the API for the selected analysis period.
-- **Print / Save as PDF** opens the browser print dialog. Choose “Save as PDF” to create a PDF report.
+Run this command from the `frontend` directory.
 
-## Climate interpretation notes
+## Configuration
 
-- A heatwave event is a rule-based indicator, not a direct measure of impacts on people.
-- The percentile baseline and minimum valid-day requirements affect which years/events qualify.
-- Missing or invalid observations must be interpreted as unavailable data, not as non-hazard days.
-- Trend estimates and significance should be interpreted cautiously, especially with short or autocorrelated annual series.
-- A custom bounding box is represented by sampled grid cells; it is not a full-resolution analysis of every location inside the box.
+Configure the following values through environment variables:
 
-## Project layout
+- `MONGODB_URI`: MongoDB connection string.
+- `MONGODB_DB_NAME`: MongoDB database name.
+- `CORS_ALLOWED_ORIGINS`: Comma-separated list of permitted frontend origins.
+- `VITE_API_URL`: Backend base URL used by the frontend.
 
-- `frontend/src`: React UI, API client, query state, and visualizations.
-- `backend/app/api`: HTTP endpoints.
-- `backend/app/engine`: cleaning, thresholds, event detection, annual metrics, trend analysis, and insights.
-- `backend/app/services`: upstream data ingestion, region handling, analysis orchestration, and MongoDB persistence.
+For deployment, configure environment variables in the relevant hosting dashboards. Do not commit database credentials or other secrets to GitHub.
 
-## Verification status for this packaged copy
+## Limitations
 
-Python source files pass bytecode compilation. The backend test suite was invoked before cleanup, but collection was blocked because several declared dependencies were not installed in the execution environment (`slowapi`, `pymannkendall`, and `mongomock`). The frontend production build could not be run because npm dependencies were not cached and package installation was unavailable offline. Run the checks in an environment with dependencies installed before deployment.
+- Results depend on the completeness and quality of historical observations.
+- Missing observations must not be treated as non-heatwave days.
+- Bounding-box analysis uses sampled grid cells rather than every location within the region.
+- Trend estimates should be interpreted cautiously, particularly for short or autocorrelated time series.
+
+## Project Structure
+
+```text
+frontend/
+  src/                 # React UI, API client, visualizations
+backend/
+  app/
+    api/               # API endpoints
+    engine/            # Detection, metrics, and trend analysis
+    services/          # Data ingestion, analysis, and storage
+```
